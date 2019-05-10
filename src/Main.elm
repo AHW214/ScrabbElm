@@ -6,9 +6,11 @@ import Browser
 import Browser.Events
 import Html
 import Html.Events
+import Html.Attributes exposing (id, class)
 import Http
 
 import RedBlackTree exposing (Tree, empty, insert, member)
+import Board exposing (Board)
 
 
 -- Program
@@ -30,11 +32,13 @@ main =
 type alias Model =
   { dict : Tree String
   , inDict : Bool
+  , board : Board
   }
 
 init : Flags -> ( Model, Cmd Msg )
 init () = ( { dict = empty
             , inDict = True
+            , board = Board.init
             }
           , Http.get
             { url = "https://raw.githubusercontent.com/AHW214/ScrabbElm/master/assets/dictionary.txt"
@@ -84,7 +88,14 @@ view : Model -> Browser.Document Msg
 view model =
   { title = "ScrabbElm"
   , body =
-    [ Html.input [ Html.Events.onInput CheckWord ] []
-    , Html.h1 [] [Html.text <| Debug.toString model.inDict ]
-    ]
+      [ Html.div
+          [ id "wrapper" ]
+          [ Html.div
+            [ class "centered" ]
+            [ Board.view model.board
+            , Html.input [ Html.Events.onInput CheckWord ] []
+            , Html.h1 [] [ Html.text <| Debug.toString model.inDict ]
+            ]
+          ]
+      ]
   }

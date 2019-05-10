@@ -1,0 +1,38 @@
+body {
+  background-color: #2C2F33;
+}
+
+#wrapper {
+  position: relative;
+}
+
+.centered {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, 25%);
+  text-align: center;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(15, auto);
+  background-color: #23272A;
+  padding: 10px;
+}
+
+.square {
+  background-color: #FFFFFF;
+  border: 1px solid #23272A;
+  font-size: 21px;
+  text-align: center;
+  width: 50px;
+  height: 50px;
+}
+
+.tile {
+  background-color: #99AAB5;
+}
+
+.premium-letter-2 {
+  background-color: #7289DA;
+}
