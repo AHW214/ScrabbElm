@@ -20,8 +20,7 @@ body {
   padding: 10px;
 }
 
-.square {
-  background-color: #FFFFFF;
+.board > div {
   border: 1px solid #23272A;
   font-size: 21px;
   text-align: center;
@@ -29,10 +28,38 @@ body {
   height: 50px;
 }
 
+.empty {
+  background-color: #FFFFFF;
+}
+
 .tile {
+  position: relative;
   background-color: #99AAB5;
+}
+
+.tile > .letter {
+  font-size: 28px;
+}
+
+.tile > .points {
+  position: absolute;
+  right: 3px;
+  bottom: 0px;
+  font-size: 16px;
 }
 
 .premium-letter-2 {
   background-color: #7289DA;
+}
+
+.premium-letter-3 {
+  background-color: rgb(46, 83, 216);
+}
+
+.premium-word-2 {
+  background-color: rgb(209, 114, 218);
+}
+
+.premium-word-3 {
+  background-color: rgb(211, 58, 78);
 }
