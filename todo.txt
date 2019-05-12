@@ -3,4 +3,5 @@
  - replenshing the rack
  - random generator 
  - tile bag (shuffling the tiles)
-
+ - undo tile placement (probably click tile)
+ - legal placements (red/green tint)
