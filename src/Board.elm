@@ -1,8 +1,10 @@
-module Board exposing (Board, Square, Multiplier, init, view)
+module Board exposing (Board, Square, Multiplier, init, setPending, view)
 
 import Html exposing (Html, Attribute)
+import Html.Events exposing (onClick)
 import Html.Attributes exposing (class)
 
+import Events exposing (Msg(..))
 import Matrix exposing (Matrix)
 import Tile exposing (Tile, Status(..))
 
@@ -74,39 +76,43 @@ init =
     |> setByIndices tripleWords (Premium (Word 3))
     |> B
 
-viewEmpty : Html msg
-viewEmpty =
+setPending : Int -> Int -> Tile -> Board -> Board
+setPending i j tile (B matrix) =
+  B (Matrix.set i j (Occupied Held tile) matrix)
+
+viewEmpty : Int -> Int -> Html Msg
+viewEmpty i j =
   Html.div
-  [ class "empty" ]
+  [ class "empty", onClick (PendingTile i j) ]
   []
 
-viewPremium : Multiplier -> Html msg
-viewPremium mult =
+viewPremium : Int -> Int -> Multiplier -> Html Msg
+viewPremium i j mult =
   let
     (num, kind, str) =
       case mult of
-        Letter i -> (String.fromInt i, "letter", "x LS")
-        Word i   -> (String.fromInt i, "word", "x WS")
+        Letter n -> (String.fromInt n, "letter", "x LS")
+        Word n   -> (String.fromInt n, "word", "x WS")
   in
     Html.div
-    [ class ("premium-" ++ kind ++ "-" ++ num) ]
+    [ class ("premium-" ++ kind ++ "-" ++ num), onClick (PendingTile i j) ]
     [ Html.text (num ++ str) ]
 
-viewSquare : msg -> Square -> Html msg
-viewSquare event square =
+viewSquare : Int -> Int -> Square -> Html Msg
+viewSquare i j square =
   case square of
     Empty  ->
-      viewEmpty
+      viewEmpty i j
     Occupied status tile ->
-      Tile.view event status tile
+      Tile.view (ChoseTile 1) status tile
     Premium mult ->
-      viewPremium mult
+      viewPremium i j mult
 
-view : msg -> Board -> Html msg
+view : msg -> Board -> Html Msg
 view event (B matrix) =
   Html.div
     [ class "board" ]
     (matrix
+      |> Matrix.indexedMap viewSquare
       |> Matrix.toLists
-      |> List.concat
-      |> List.map (viewSquare event))
+      |> List.concat)

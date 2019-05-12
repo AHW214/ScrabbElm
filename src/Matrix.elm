@@ -23,6 +23,10 @@ map : (a -> b) -> Matrix a -> Matrix b
 map fun (M rows) =
   M (Array.map (Array.map fun) rows)
 
+indexedMap : (Int -> Int -> a -> b) -> Matrix a -> Matrix b
+indexedMap fun (M rows) =
+  M (Array.indexedMap (\i -> Array.indexedMap (fun i)) rows)
+
 toLists : Matrix a -> List (List a)
 toLists (M rows) =
   Array.toList (Array.map Array.toList rows)
