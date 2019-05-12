@@ -1,0 +1,6 @@
+ - implement player turns
+ - tile placing
+ - replenshing the rack
+ - random generator 
+ - tile bag (shuffling the tiles)
+
