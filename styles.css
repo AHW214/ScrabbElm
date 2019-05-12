@@ -13,28 +13,26 @@ body {
   text-align: center;
 }
 
-.board {
+.rack {
   display: grid;
-  grid-template-columns: repeat(15, auto);
+  grid-template-columns: repeat(7, auto);
   background-color: #23272A;
   padding: 10px;
+  width: min-content;
+  margin: 50px auto;
 }
 
-.board > div {
-  border: 1px solid #23272A;
-  font-size: 21px;
-  text-align: center;
-  width: 50px;
-  height: 50px;
-}
-
-.empty {
+.rack > .empty {
   background-color: #FFFFFF;
 }
 
 .tile {
   position: relative;
   background-color: #99AAB5;
+}
+
+.tile.held {
+  opacity: 0.5;
 }
 
 .tile > .letter {
@@ -48,18 +46,37 @@ body {
   font-size: 16px;
 }
 
-.premium-letter-2 {
+.board {
+  display: grid;
+  grid-template-columns: repeat(15, auto);
+  background-color: #23272A;
+  padding: 10px;
+}
+
+.board > div, .rack > div {
+  border: 1px solid #23272A;
+  font-size: 21px;
+  text-align: center;
+  width: 50px;
+  height: 50px;
+}
+
+.board > .empty {
+  background-color: #FFFFFF;
+}
+
+.board > .premium-letter-2 {
   background-color: #7289DA;
 }
 
-.premium-letter-3 {
+.board > .premium-letter-3 {
   background-color: rgb(46, 83, 216);
 }
 
-.premium-word-2 {
+.board > .premium-word-2 {
   background-color: rgb(209, 114, 218);
 }
 
-.premium-word-3 {
+.board > .premium-word-3 {
   background-color: rgb(211, 58, 78);
 }

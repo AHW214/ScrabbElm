@@ -11,6 +11,8 @@ import Http
 
 import RedBlackTree exposing (Tree, empty, insert, member)
 import Board exposing (Board)
+import Rack exposing (Rack)
+import Tile exposing (Tile)
 
 
 -- Program
@@ -31,14 +33,14 @@ main =
 
 type alias Model =
   { dict : Tree String
-  , inDict : Bool
   , board : Board
+  , rack : Rack
   }
 
 init : Flags -> ( Model, Cmd Msg )
 init () = ( { dict = empty
-            , inDict = True
             , board = Board.init
+            , rack = Rack.init
             }
           , Http.get
             { url = "https://raw.githubusercontent.com/AHW214/ScrabbElm/master/assets/dictionary.txt"
@@ -51,7 +53,7 @@ init () = ( { dict = empty
 
 type Msg
   = GotText (Result Http.Error String)
-  | CheckWord String
+  | ChoseTile Int
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -67,10 +69,11 @@ update msg model =
           , Cmd.none
           )
 
-    CheckWord word ->
-      ( { model | inDict = member word model.dict }
+    ChoseTile index ->
+      ( { model | rack = Debug.log "a" <| Rack.take index model.rack }
       , Cmd.none
       )
+
 
 loadDictionary : String -> Tree String
 loadDictionary = RedBlackTree.fromList << String.words
@@ -92,9 +95,8 @@ view model =
           [ id "wrapper" ]
           [ Html.div
             [ class "centered" ]
-            [ Board.view model.board
-            , Html.input [ Html.Events.onInput CheckWord ] []
-            , Html.h1 [] [ Html.text <| Debug.toString model.inDict ]
+            [ Board.view (ChoseTile 1) model.board
+            , Rack.view ChoseTile model.rack
             ]
           ]
       ]

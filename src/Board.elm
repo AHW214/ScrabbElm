@@ -4,7 +4,7 @@ import Html exposing (Html, Attribute)
 import Html.Attributes exposing (class)
 
 import Matrix exposing (Matrix)
-import Tile exposing (Tile)
+import Tile exposing (Tile, Status(..))
 
 type Multiplier
   = Letter Int
@@ -12,10 +12,13 @@ type Multiplier
 
 type Square
   = Empty
-  | Tile Tile
+  | Occupied Status Tile
   | Premium Multiplier
 
 type Board = B (Matrix Square)
+
+size : Int
+size = 15
 
 doubleLetters : List (Int, Int)
 doubleLetters =
@@ -64,7 +67,7 @@ setByIndices is x matrix = List.foldl (\(i, j) m -> Matrix.set i j x m) matrix i
 init : Board
 init =
   Empty
-    |> Matrix.repeat 15 15
+    |> Matrix.repeat size size
     |> setByIndices doubleLetters (Premium (Letter 2))
     |> setByIndices tripleLetters (Premium (Letter 3))
     |> setByIndices doubleWords (Premium (Word 2))
@@ -89,21 +92,21 @@ viewPremium mult =
     [ class ("premium-" ++ kind ++ "-" ++ num) ]
     [ Html.text (num ++ str) ]
 
-viewSquare : Square -> Html msg
-viewSquare square =
+viewSquare : msg -> Square -> Html msg
+viewSquare event square =
   case square of
     Empty  ->
       viewEmpty
-    Tile tile ->
-      Tile.view tile
+    Occupied status tile ->
+      Tile.view event status tile
     Premium mult ->
       viewPremium mult
 
-view : Board -> Html msg
-view (B matrix) =
+view : msg -> Board -> Html msg
+view event (B matrix) =
   Html.div
     [ class "board" ]
     (matrix
       |> Matrix.toLists
       |> List.concat
-      |> List.map viewSquare)
+      |> List.map (viewSquare event))
