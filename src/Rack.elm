@@ -1,4 +1,4 @@
-module Rack exposing (..)
+module Rack exposing (Rack, empty, take, return, replenish, view, init)
 
 import Array exposing (Array)
 import Html exposing (Html)
@@ -24,7 +24,7 @@ empty = R (Array.repeat size Empty)
 
 init = R (Array.map (Occupied False << Tile.letter) <| Array.fromList <| String.toList "abcdefg")
 
-take : Int -> Rack -> (Maybe Tile, Rack)
+take : Int -> Rack -> (Maybe (Int, Tile), Rack)
 take index (R cells) =
   case Array.get index cells of
     Nothing    -> (Nothing, R cells)
@@ -34,7 +34,7 @@ take index (R cells) =
         True ->
           (Nothing, R cells)
         False ->
-          (Just tile, R (Array.set index (Occupied True tile) cells))
+          (Just (index, tile), R (Array.set index (Occupied True tile) cells))
 
 return : Int -> Rack -> Rack
 return index (R cells) =

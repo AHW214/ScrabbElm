@@ -9,7 +9,6 @@ import Html.Events
 import Html.Attributes exposing (id, class)
 import Http
 
-import Events exposing (Msg(..))
 import RedBlackTree exposing (Tree, empty, insert, member)
 import Board exposing (Board)
 import Rack exposing (Rack)
@@ -36,7 +35,7 @@ type alias Model =
   { dict : Tree String
   , board : Board
   , rack : Rack
-  , held : Maybe Tile
+  , held : Maybe (Int, Tile)
   }
 
 init : Flags -> ( Model, Cmd Msg )
@@ -56,8 +55,10 @@ init () = ( { dict = empty
 
 type Msg
   = GotText (Result Http.Error String)
-  | ChoseTile Int
-  | PendingTile Int Int
+  | TookTile Int
+  | SetPendingTile Int Int
+  | RemPendingTile Int Int
+  | EndTurn
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -73,23 +74,68 @@ update msg model =
           , Cmd.none
           )
 
-    ChoseTile index ->
-      let (held, rack) = Rack.take index model.rack in
+    TookTile index ->
+      ( case model.held of
+        Nothing ->
+          let (taken, newRack) = Rack.take index model.rack in
+          { model
+            | held = taken
+            , rack = newRack
+          }
+        _ -> model
+      , Cmd.none
+      )
+
+    SetPendingTile i j ->
+      ( case model.held of
+          Nothing -> model
+          Just rackTile ->
+            let (board, _) = Board.setPending i j rackTile model.board in
+            { model
+                | board = board
+                , held = Nothing
+            }
+      , Cmd.none
+      )
+
+    RemPendingTile i j ->
+      let
+        (newBoard, newRack) =
+          case model.held of
+            Nothing ->
+              let (board, mi) = Board.removePending i j model.board in
+              (board
+              , case mi of
+                  Nothing ->
+                    model.rack
+                  Just index ->
+                    Rack.return index model.rack
+              )
+            Just rackTile ->
+              let
+                (_, mi) = Board.removePending i j model.board
+                (board, _) = Board.setPending i j rackTile model.board
+              in
+                (board
+                , case mi of
+                    Nothing ->
+                      model.rack
+                    Just index ->
+                      Rack.return index model.rack
+                )
+      in
       ( { model
-            | rack = rack
-            , held = held
+          | board = newBoard
+          , rack = newRack
+          , held = Nothing
         }
       , Cmd.none
       )
 
-    PendingTile i j ->
-      ( case model.held of
-          Nothing -> model
-          Just tile ->
-            { model
-                | board = Board.setPending i j tile model.board
-                , held = Nothing
-            }
+    EndTurn ->
+      ( { model
+          | board = Board.placePending model.board
+        }
       , Cmd.none
       )
 
@@ -114,8 +160,12 @@ view model =
           [ id "wrapper" ]
           [ Html.div
             [ class "centered" ]
-            [ Board.view (ChoseTile 1) model.board
-            , Rack.view model.rack
+            [ Board.view
+                { evEmpty = SetPendingTile
+                , evPending = RemPendingTile
+                }
+                model.board
+            , Rack.view TookTile model.rack
             ]
           ]
       ]
