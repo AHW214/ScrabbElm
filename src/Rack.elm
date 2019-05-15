@@ -14,7 +14,8 @@ type Cell
   = Empty
   | Occupied Chosen Tile
 
-type Rack = R (Array Cell)
+type Rack =
+  R (Array Cell)
 
 size : Int
 size = 7
@@ -52,8 +53,8 @@ replenish : Rack -> List Tile -> (Rack, List Tile)
 replenish (R spots) bag =
   Debug.todo "TODO"
 
-viewCell : (Int -> msg) -> Int -> Cell -> Html msg
-viewCell event i cell =
+viewCell : msg -> Cell -> Html msg
+viewCell event cell =
   let
     (attr, html) =
       case cell of
@@ -63,9 +64,9 @@ viewCell event i cell =
           )
         Occupied chosen tile ->
           ( if chosen then
-              [ class "chosen" ]
+              [ onClick event, class "chosen" ]
             else
-              [ onClick (event i) ]
+              [ onClick event ]
           , [ Tile.view tile ]
           )
   in
@@ -75,4 +76,6 @@ view : (Int -> msg) -> Rack -> Html msg
 view event (R cells) =
   Html.div
   [ class "rack" ]
-  (Array.toList <| Array.indexedMap (viewCell event) cells)
+  (cells
+    |> Array.indexedMap (\i -> viewCell (event i))
+    |> Array.toList)

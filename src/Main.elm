@@ -55,9 +55,8 @@ init () = ( { dict = empty
 
 type Msg
   = GotText (Result Http.Error String)
-  | TookTile Int
-  | SetPendingTile Int Int
-  | RemPendingTile Int Int
+  | ClickedRack Int
+  | ClickedBoard Int Int
   | EndTurn
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -74,63 +73,45 @@ update msg model =
           , Cmd.none
           )
 
-    TookTile index ->
-      ( case model.held of
-        Nothing ->
-          let (taken, newRack) = Rack.take index model.rack in
+    ClickedRack i ->
+      ( let
+          (taken, newRack) =
+            case model.held of
+              Nothing ->
+                Rack.take i model.rack
+              Just (j, _) ->
+                if j == i then
+                  ( Nothing
+                  , Rack.return i model.rack
+                  )
+                else
+                 model.rack
+                  |> Rack.return j
+                  |> Rack.take i
+        in
           { model
             | held = taken
             , rack = newRack
           }
-        _ -> model
       , Cmd.none
       )
 
-    SetPendingTile i j ->
-      ( case model.held of
-          Nothing -> model
-          Just rackTile ->
-            let (board, _) = Board.setPending i j rackTile model.board in
-            { model
-                | board = board
-                , held = Nothing
-            }
-      , Cmd.none
-      )
-
-    RemPendingTile i j ->
+    ClickedBoard i j ->
       let
-        (newBoard, newRack) =
-          case model.held of
-            Nothing ->
-              let (board, mi) = Board.removePending i j model.board in
-              (board
-              , case mi of
+        (newBoard, maybeRet) = Board.set i j model.held model.board
+      in
+        ( { model
+            | board = newBoard
+            , held = Nothing
+            , rack =
+                case maybeRet of
                   Nothing ->
                     model.rack
                   Just index ->
                     Rack.return index model.rack
-              )
-            Just rackTile ->
-              let
-                (_, mi) = Board.removePending i j model.board
-                (board, _) = Board.setPending i j rackTile model.board
-              in
-                (board
-                , case mi of
-                    Nothing ->
-                      model.rack
-                    Just index ->
-                      Rack.return index model.rack
-                )
-      in
-      ( { model
-          | board = newBoard
-          , rack = newRack
-          , held = Nothing
-        }
-      , Cmd.none
-      )
+              }
+        , Cmd.none
+        )
 
     EndTurn ->
       ( { model
@@ -160,12 +141,8 @@ view model =
           [ id "wrapper" ]
           [ Html.div
             [ class "centered" ]
-            [ Board.view
-                { evEmpty = SetPendingTile
-                , evPending = RemPendingTile
-                }
-                model.board
-            , Rack.view TookTile model.rack
+            [ Board.view ClickedBoard model.board
+            , Rack.view ClickedRack model.rack
             ]
           ]
       ]

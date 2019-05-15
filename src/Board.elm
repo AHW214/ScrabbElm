@@ -1,4 +1,4 @@
-module Board exposing (Board, init, setPending, removePending, placePending, view)
+module Board exposing (Board, init, set, placePending, view)
 
 
 import Dict exposing (Dict)
@@ -8,14 +8,6 @@ import Html.Attributes exposing (class)
 
 import Matrix exposing (Matrix)
 import Tile exposing (Tile)
-
-type alias Event msg
-  = Int -> Int -> msg
-
-type alias Events msg =
-  { evEmpty : Event msg
-  , evPending : Event msg
-  }
 
 type Multiplier
   = Letter Int
@@ -36,7 +28,8 @@ type Cell
 type alias Pending =
   Dict (Int, Int) Int
 
-type Board = B Pending (Matrix Cell)
+type Board =
+  B Pending (Matrix Cell)
 
 normal : Cell
 normal =
@@ -111,33 +104,28 @@ init =
     |> setByIndices tripleWords (premium (Word 3))
     |> B Dict.empty
 
-setPending : Int -> Int -> (Int, Tile) -> Board -> (Board, Maybe Tile)
-setPending i j (r, t1) (B pending matrix) =
+set : Int -> Int -> Maybe (Int, Tile) -> Board -> (Board, Maybe Int)
+set i j held (B pending matrix) =
   case Matrix.get i j matrix of
     Nothing ->
       (B pending matrix, Nothing)
     Just (C kind state) ->
-      case state of
-        Empty ->
-          (B (Dict.insert (i, j) r pending) (Matrix.set i j (C kind (Pending t1)) matrix), Nothing)
-        Pending t2 ->
-          (B (Dict.insert (i, j) r pending) (Matrix.set i j (C kind (Pending t1)) matrix), Just t2)
-        Placed _ ->
-          (B pending matrix, Nothing)
-
-removePending : Int -> Int -> Board -> (Board, Maybe Int)
-removePending i j (B pending matrix) =
-  case Matrix.get i j matrix of
-    Nothing ->
-      (B pending matrix, Nothing)
-    Just (C kind state) ->
-      case state of
-        Pending tile ->
+      case (held, state) of
+        (Nothing, Pending tile) ->
           ( B (Dict.remove (i, j) pending) (Matrix.set i j (C kind Empty) matrix)
-          , Dict.get (i, j) pending |> Maybe.andThen Just)
+          , Dict.get (i, j) pending |> Maybe.andThen Just
+          )
+        (Just (r, tile), Pending _) ->
+          ( B (Dict.insert (i, j) r pending) (Matrix.set i j (C kind (Pending tile)) matrix)
+          , Dict.get (i, j) pending |> Maybe.andThen Just
+          )
+        (Just (r, tile), Empty) ->
+          ( B (Dict.insert (i, j) r pending) (Matrix.set i j (C kind (Pending tile)) matrix)
+          , Nothing
+          )
         _ -> (B pending matrix, Nothing)
 
--- inefficient ig (maybe store list of indices for pending tiles)
+
 placePending : Board -> Board
 placePending (B pending matrix) =
   let
@@ -184,23 +172,23 @@ viewPlaced tile =
     []
     [ Tile.view tile ]
 
-viewCell : Events msg -> Int -> Int -> Cell -> Html msg
-viewCell { evEmpty, evPending } i j (C kind state) =
+viewCell : msg -> Cell -> Html msg
+viewCell event (C kind state) =
   case (kind, state) of
     (Normal, Empty) ->
-      viewNormal (evEmpty i j)
+      viewNormal event
     (Premium mult, Empty) ->
-      viewPremium (evEmpty i j) mult
+      viewPremium event mult
     (_, Pending tile) ->
-      viewPending (evPending i j) tile
+      viewPending event tile
     (_, Placed tile) ->
       viewPlaced tile
 
-view : Events msg -> Board -> Html msg
-view events (B pending matrix) =
+view : (Int -> Int -> msg) -> Board -> Html msg
+view event (B pending matrix) =
   Html.div
     [ class "board" ]
     (matrix
-      |> Matrix.indexedMap (viewCell events)
+      |> Matrix.indexedMap (\i j -> viewCell (event i j))
       |> Matrix.toLists
       |> List.concat)
