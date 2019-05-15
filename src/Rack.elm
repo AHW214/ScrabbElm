@@ -1,4 +1,4 @@
-module Rack exposing (Rack, empty, take, return, replenish, view, init)
+module Rack exposing (Rack, empty, init, take, return, replenish, view)
 
 import Array exposing (Array)
 import Html exposing (Html)
@@ -23,7 +23,16 @@ size = 7
 empty : Rack
 empty = R (Array.repeat size Empty)
 
-init = R (Array.map (Occupied False << Tile.letter) <| Array.fromList <| String.toList "abcdefg")
+-- assumes bag has over seven tiles
+init : List Tile -> (Rack, List Tile)
+init bag =
+  ( bag
+    |> List.take size
+    |> List.map (Occupied False)
+    |> Array.fromList
+    |> R
+  , List.drop size bag
+  )
 
 take : Int -> Rack -> (Maybe (Int, Tile), Rack)
 take index (R cells) =
@@ -49,9 +58,24 @@ return index (R cells) =
         False ->
           R cells
 
-replenish : Rack -> List Tile -> (Rack, List Tile)
-replenish (R spots) bag =
-  Debug.todo "TODO"
+replenish : List Tile -> Rack -> (Rack, List Tile)
+replenish bag (R cells) =
+  Array.foldl
+    (\cell (newCells, newBag) ->
+      case cell of
+        Empty ->
+          (Array.push cell newCells, newBag)
+        Occupied False tile ->
+          (Array.push cell newCells, newBag)
+        Occupied True tile ->
+          case List.head newBag of
+            Nothing ->
+              (Array.push Empty newCells, newBag)
+            Just newTile ->
+              (Array.push (Occupied False newTile) newCells, List.drop 1 newBag)
+    )
+    (Array.empty, bag) cells
+  |> Tuple.mapFirst R
 
 viewCell : msg -> Cell -> Html msg
 viewCell event cell =

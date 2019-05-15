@@ -103,6 +103,7 @@ init =
     |> setByIndices tripleWords (premium (Word 3))
     |> B Dict.empty
 
+-- refactor probably
 set : Int -> Int -> Maybe (Int, Tile) -> Board -> (Board, Maybe Int)
 set i j held (B pending matrix) =
   case Matrix.get i j matrix of

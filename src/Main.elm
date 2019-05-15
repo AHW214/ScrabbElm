@@ -35,13 +35,15 @@ type alias Model =
   { dict : Tree String
   , board : Board
   , rack : Rack
+  , bag : List Tile
   , held : Maybe (Int, Tile)
   }
 
 init : Flags -> ( Model, Cmd Msg )
 init () = ( { dict = empty
             , board = Board.init
-            , rack = Rack.init
+            , rack = Rack.empty
+            , bag = List.map Tile.letter (String.toList "abcdefghijklmnopqrstuvwxyz")
             , held = Nothing
             }
           , Http.get
@@ -55,6 +57,7 @@ init () = ( { dict = empty
 
 type Msg
   = GotText (Result Http.Error String)
+  | GotBag (List Tile)
   | ClickedRack Int
   | ClickedBoard Int Int
   | EndTurn
@@ -63,62 +66,82 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
   case msg of
     GotText result ->
-      case result of
-        Ok fulltext ->
-          ( { model | dict = loadDictionary fulltext }
-          , Cmd.none
-          )
-        Err _ ->
-          ( model
-          , Cmd.none
-          )
+      let
+        newModel =
+          case result of
+            Ok fulltext ->
+              { model | dict = loadDictionary fulltext }
+            Err _ ->
+              model
+      in
+        ( newModel
+        , Cmd.none
+        )
+
+    GotBag bag ->
+      let
+        (newRack, newBag) = Rack.init model.bag
+      in
+        ( { model
+            | rack = newRack
+            , bag = newBag
+          }
+        , Cmd.none
+        )
 
     ClickedRack i ->
-      ( let
-          (taken, newRack) =
-            case model.held of
-              Nothing ->
-                Rack.take i model.rack
-              Just (j, _) ->
-                if j == i then
-                  ( Nothing
-                  , Rack.return i model.rack
-                  )
-                else
-                 model.rack
-                  |> Rack.return j
-                  |> Rack.take i
+      let
+        (taken, newRack) =
+          case model.held of
+            Nothing ->
+              Rack.take i model.rack
+            Just (j, _) ->
+              if j == i then
+                ( Nothing
+                , Rack.return i model.rack
+                )
+              else
+                model.rack
+                |> Rack.return j
+                |> Rack.take i
         in
-          { model
-            | held = taken
-            , rack = newRack
-          }
+      ( { model
+          | held = taken
+          , rack = newRack
+        }
       , Cmd.none
       )
 
     ClickedBoard i j ->
       let
         (newBoard, maybeRet) = Board.set i j model.held model.board
+        newRack =
+          case maybeRet of
+            Nothing ->
+              model.rack
+            Just index ->
+              Rack.return index model.rack
       in
         ( { model
             | board = newBoard
             , held = Nothing
-            , rack =
-                case maybeRet of
-                  Nothing ->
-                    model.rack
-                  Just index ->
-                    Rack.return index model.rack
-              }
+            , rack = newRack
+          }
         , Cmd.none
         )
 
     EndTurn ->
-      ( { model
-          | board = Board.placePending model.board
-        }
-      , Cmd.none
-      )
+      let
+        (newRack, newBag) = Rack.replenish model.bag model.rack
+        newBoard = Board.placePending model.board
+      in
+        ( { model
+            | board = newBoard
+            , rack = newRack
+            , bag = newBag
+          }
+        , Cmd.none
+        )
 
 
 loadDictionary : String -> Tree String
@@ -143,6 +166,8 @@ view model =
             [ class "centered" ]
             [ Board.view ClickedBoard model.held model.board
             , Rack.view ClickedRack model.rack
+            , Html.button [ Html.Events.onClick (GotBag model.bag) ] [ Html.text "init rack" ]
+            , Html.button [ Html.Events.onClick EndTurn ] [ Html.text "end turn" ]
             ]
           ]
       ]
