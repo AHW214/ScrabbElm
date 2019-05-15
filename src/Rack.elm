@@ -2,48 +2,77 @@ module Rack exposing (..)
 
 import Array exposing (Array)
 import Html exposing (Html)
+import Html.Events exposing (onClick)
 import Html.Attributes exposing (class)
 
-import Events exposing (Msg(..))
-import Tile exposing (Tile, Status(..))
+import Tile exposing (Tile)
 
-type Spot
+type alias Chosen
+  = Bool
+
+type Cell
   = Empty
-  | Occupied Status Tile
+  | Occupied Chosen Tile
 
-type Rack = R (Array Spot)
+type Rack = R (Array Cell)
 
 size : Int
 size = 7
 
 empty : Rack
-empty = R Array.empty
+empty = R (Array.repeat size Empty)
 
-init = R (Array.map (Occupied Placed << Tile.letter) <| Array.fromList <| String.toList "abcdefg")
+init = R (Array.map (Occupied False << Tile.letter) <| Array.fromList <| String.toList "abcdefg")
 
--- silly
 take : Int -> Rack -> (Maybe Tile, Rack)
-take index (R spots) =
-  case Array.get index spots of
-    Nothing    -> (Nothing, R spots)
-    Just Empty -> (Nothing, R spots)
-    Just (Occupied _ tile) ->
-      (Just tile, R (Array.set index (Occupied Held tile) spots))
+take index (R cells) =
+  case Array.get index cells of
+    Nothing    -> (Nothing, R cells)
+    Just Empty -> (Nothing, R cells)
+    Just (Occupied chosen tile) ->
+      case chosen of
+        True ->
+          (Nothing, R cells)
+        False ->
+          (Just tile, R (Array.set index (Occupied True tile) cells))
+
+return : Int -> Rack -> Rack
+return index (R cells) =
+  case Array.get index cells of
+    Nothing    -> R cells
+    Just Empty -> R cells
+    Just (Occupied chosen tile) ->
+      case chosen of
+        True ->
+          R (Array.set index (Occupied False tile) cells)
+        False ->
+          R cells
 
 replenish : Rack -> List Tile -> (Rack, List Tile)
 replenish (R spots) bag =
   Debug.todo "TODO"
 
-viewSpot : Int -> Spot -> Html Msg
-viewSpot i spot =
-  case spot of
-    Empty ->
-      Html.div [ class "empty" ] []
-    Occupied status tile ->
-      Tile.view (ChoseTile i) status tile
+viewCell : (Int -> msg) -> Int -> Cell -> Html msg
+viewCell event i cell =
+  let
+    (attr, html) =
+      case cell of
+        Empty ->
+          ( [ class "empty" ]
+          , []
+          )
+        Occupied chosen tile ->
+          ( if chosen then
+              [ class "chosen" ]
+            else
+              [ onClick (event i) ]
+          , [ Tile.view tile ]
+          )
+  in
+    Html.div attr html
 
-view : Rack -> Html Msg
-view (R spots) =
+view : (Int -> msg) -> Rack -> Html msg
+view event (R cells) =
   Html.div
   [ class "rack" ]
-  (Array.toList <| Array.indexedMap viewSpot spots)
+  (Array.toList <| Array.indexedMap (viewCell event) cells)

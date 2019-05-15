@@ -54,6 +54,11 @@ init () = ( { dict = empty
 
 -- Update
 
+type Msg
+  = GotText (Result Http.Error String)
+  | ChoseTile Int
+  | PendingTile Int Int
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
   case msg of

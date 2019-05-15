@@ -1,12 +1,8 @@
-module Tile exposing (Tile, Status(..), blank, letter, view)
+module Tile exposing (Tile, blank, letter, view)
 
 import Html exposing (Html, Attribute)
 import Html.Events exposing (onClick)
 import Html.Attributes exposing (class)
-
-type Status
-  = Held
-  | Placed
 
 type Tile
   = Blank
@@ -44,8 +40,8 @@ blank = Blank
 letter : Char -> Tile
 letter c = Letter c (value c)
 
-view : msg -> Status -> Tile -> Html msg
-view event status tile =
+view : Tile -> Html msg
+view tile =
   let
     html =
       case tile of
@@ -54,11 +50,7 @@ view event status tile =
           [ Html.div [ class "letter" ] [ Html.text (String.fromChar c) ]
           , Html.div [ class "points" ] [ Html.text (String.fromInt i) ]
           ]
-    sts =
-      case status of
-        Placed -> "placed"
-        Held   -> "held"
   in
     Html.div
-      [ class "tile", class sts, onClick event ]
+      [ class "tile" ]
       html
