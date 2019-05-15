@@ -63,6 +63,10 @@ body {
   height: 50px;
 }
 
+.board > .hover:hover {
+  background-color: #FF0000;
+}
+
 .board > .empty {
   background-color: #FFFFFF;
 }

@@ -1,6 +1,5 @@
 module Board exposing (Board, init, set, placePending, view)
 
-
 import Dict exposing (Dict)
 import Html exposing (Html, Attribute)
 import Html.Events exposing (onClick)
@@ -142,13 +141,17 @@ placePending (B pending matrix) =
   in
     B Dict.empty newMatrix
 
-viewNormal : msg -> Html msg
-viewNormal event =
-  Html.div
-    [ class "empty", onClick event ]
-    []
 
-viewPremium : msg ->  Multiplier -> Html msg
+type alias Properties msg
+  = (List (Attribute msg), List (Html msg))
+
+viewNormal : msg -> Properties msg
+viewNormal event =
+    ( [ class "empty", onClick event ]
+    , []
+    )
+
+viewPremium : msg ->  Multiplier -> Properties msg
 viewPremium event mult =
   let
     (num, kind, str) =
@@ -156,39 +159,53 @@ viewPremium event mult =
         Letter n -> (String.fromInt n, "letter", "x LS")
         Word n   -> (String.fromInt n, "word", "x WS")
   in
-    Html.div
-      [ class ("premium-" ++ kind ++ "-" ++ num), onClick event ]
-      [ Html.text (num ++ str) ]
+      ( [ class ("premium-" ++ kind ++ "-" ++ num), onClick event ]
+      , [ Html.text (num ++ str) ]
+      )
 
-viewPending : msg -> Tile -> Html msg
+viewPending : msg -> Tile -> Properties msg
 viewPending event tile =
-  Html.div
-    [ class "pending", onClick event ]
-    [ Tile.view tile ]
+    ( [ class "pending", onClick event ]
+    , [ Tile.view tile ]
+    )
 
-viewPlaced : Tile -> Html msg
+viewPlaced : Tile -> Properties msg
 viewPlaced tile =
-  Html.div
-    []
-    [ Tile.view tile ]
+    ( []
+    , [ Tile.view tile ]
+    )
 
-viewCell : msg -> Cell -> Html msg
-viewCell event (C kind state) =
-  case (kind, state) of
-    (Normal, Empty) ->
-      viewNormal event
-    (Premium mult, Empty) ->
-      viewPremium event mult
-    (_, Pending tile) ->
-      viewPending event tile
-    (_, Placed tile) ->
-      viewPlaced tile
+viewCell : msg -> List (Attribute msg) -> Cell -> Html msg
+viewCell event attr1 (C kind state) =
+  let
+    (attr2, html) =
+      case (kind, state) of
+        (Normal, Empty) ->
+          viewNormal event
+        (Premium mult, Empty) ->
+          viewPremium event mult
+        (_, Pending tile) ->
+          viewPending event tile
+        (_, Placed tile) ->
+          viewPlaced tile
+  in
+    Html.div
+    (attr1 ++ attr2)
+    html
 
-view : (Int -> Int -> msg) -> Board -> Html msg
-view event (B pending matrix) =
-  Html.div
-    [ class "board" ]
-    (matrix
-      |> Matrix.indexedMap (\i j -> viewCell (event i j))
-      |> Matrix.toLists
-      |> List.concat)
+view : (Int -> Int -> msg) -> Maybe a -> Board -> Html msg
+view event held (B pending matrix) =
+  let
+    attr =
+      case held of
+        Nothing ->
+          []
+        Just _ ->
+          [ class "hover" ]
+  in
+    Html.div
+      [ class "board" ]
+      (matrix
+        |> Matrix.indexedMap (\i j -> viewCell (event i j) attr)
+        |> Matrix.toLists
+        |> List.concat)

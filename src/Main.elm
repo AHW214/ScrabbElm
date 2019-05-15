@@ -141,7 +141,7 @@ view model =
           [ id "wrapper" ]
           [ Html.div
             [ class "centered" ]
-            [ Board.view ClickedBoard model.board
+            [ Board.view ClickedBoard model.held model.board
             , Rack.view ClickedRack model.rack
             ]
           ]
