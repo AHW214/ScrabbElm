@@ -447,36 +447,36 @@ calculateWord fi fj direction (B pend mat) =
         (recurVal+currVal, currString ++ recurString , recurMult*currMult)
 
 --Traverses the Pending word string (the first letter at (fi, fj)) and checks if the 
---perpendicular words are valid. Returns Just score if the words are all valid. Nothing otherwise.
+--perpendicular words are valid. Returns Just total_score of the perpendicular words are all valid. Nothing otherwise.
 traversePlayedWord : Int -> Int -> Direction -> Board -> Maybe Int
-traversePlayedWord fi fj direction b = 
+traversePlayedWord fi fj direction (B pend mat) = 
   if direction == Row then
     let 
-      (perpi, perpj) = findFirstLetter fi fj Col b 
+      (perpi, perpj) = findFirstLetter fi fj Col (B pend mat)
     in
-      if (perpi, perpj) == (fi, fj) then
-        --No perpendicular word was formed 
-        traversePlayedWord (fi +1) fj Row b
-      else 
-        case (traversePlayedWord (fi +1) fj Row b, calculateWord perpi perpj Col b) of 
-          (Nothing, _) -> Nothing
-          (Just val1, (val2, word, mult)) -> 
-            if RedBlackTree.member word dict then
-              Just (val1 + val2*mult)
-            else 
-              Nothing
+      case (traversePlayedWord fi (fj+1) Row (B pend mat), calculateWord perpi perpj Col (B pend mat)) of 
+        (Nothing, _) -> Nothing
+        (Just val1, (val2, word, mult)) -> 
+          if String.length word <= 1 then
+          --then no perpendicular word was formed and so only return val1 
+            Just val1 
+          else if RedBlackTree.member word dict then
+            Just (val1 + val2*mult)
+          else 
+            --The word formed was invalid
+            Nothing
   else  --direction = Col
     let 
-      (perpi, perpj) = findFirstLetter fi fj Row b 
+      (perpi, perpj) = findFirstLetter fi fj Row (B pend mat) 
     in
-      if (perpi, perpj) == (fi, fj) then
-        --No perpendicular word was formed 
-        traversePlayedWord fi (fj +1) Col b
-      else 
-        case (traversePlayedWord fi (fj+1) Col b, calculateWord perpi perpj Row b) of 
-          (Nothing, _) -> Nothing
-          (Just val1, (val2, word, mult)) -> 
-            if RedBlackTree.member word dict then
-              Just (val1 + val2*mult)
-            else 
-              Nothing
+      case (traversePlayedWord fi (fj+1) Col (B pend mat), calculateWord perpi perpj Row (B pend mat)) of 
+        (Nothing, _) -> Nothing
+        (Just val1, (val2, word, mult)) -> 
+          if String.length word <= 1 then
+          --then no perpendicular word was formed and so only return val1 
+            Just val1 
+          else if RedBlackTree.member word dict then
+            Just (val1 + val2*mult)
+          else 
+            --The word formed was invalid
+            Nothing
