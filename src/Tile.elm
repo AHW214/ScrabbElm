@@ -1,4 +1,4 @@
-module Tile exposing (Tile, blank, letter, view)
+module Tile exposing (Tile(..), blank, letter, view)
 
 import Html exposing (Html, Attribute)
 import Html.Events exposing (onClick)
