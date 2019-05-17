@@ -4,7 +4,7 @@ import Dict exposing (Dict)
 import Html exposing (Html, Attribute)
 import Html.Events exposing (onClick)
 import Html.Attributes exposing (class)
-import RedBlackTree
+import RedBlackTree exposing (Tree)
 
 import Matrix exposing (Matrix)
 import Tile exposing (Tile)
@@ -213,13 +213,36 @@ view event held (B pending matrix) =
         |> List.concat)
 
 ------------------------------------Troy's Valid Move Checker --------------------------------------
---placeholder dictionary.
-dict = RedBlackTree.empty
 
 --direction the placed letters go
 --Row is the first entry and Column is the second entry
 --in Matrix indexing
 type Direction = Row | Col
+
+stepIndex : Direction -> (Int, Int) -> Maybe (Int, Int)
+stepIndex dir (i, j) =
+  case dir of
+    Row ->
+      if j < size - 1 then
+        Just (i, j + 1)
+      else
+        Nothing
+    Col ->
+      if i < size - 1 then
+        Just (i + 1, j)
+      else
+        Nothing
+
+getTile : State -> Maybe Tile
+getTile state =
+  case state of
+    Empty ->
+      Nothing
+    Pending tile ->
+      Just tile
+    Placed tile ->
+      Just tile
+
 ---------------------------------------------------Placing Tiles on the Board as Pending ------------------------------------
 --Decides whether it is ok to place a tile at the index (i,j) in the board
 okPlace : Int -> Int -> Board -> Bool
@@ -265,6 +288,7 @@ addTileToBoard i j rackIndex tile (B pend mat) =
   else
     Nothing
 
+
 --------------------------------------------Check Pending Tiles For Validity -----------------------------------------
 {-If the pending tiles are contiguous and the words created by the pending tiles are valid,
   a maybe int is returned. Otherwise, Nothing is returned (i.e. the player's move is invalid).
@@ -274,13 +298,13 @@ addTileToBoard i j rackIndex tile (B pend mat) =
  Finally, if the pending tiles combined with the permanent tiles
   are not contiguous, then return nothing.
  THIS IS THE FUNCTION TO USE WHEN CHECKING IF A PLAY IS LEGAL-}
-pendingTilesWordCheck : Board -> Maybe Int
-pendingTilesWordCheck (B pend mat) =
+pendingTilesWordCheck : Tree String -> Board -> Maybe Int
+pendingTilesWordCheck dict (B pend mat) =
   let
     --ordered from least to greatest. Note that because of
-    --how a valid "pend" is built, the indicies will
+    --how a valid "pend" is built, the indices will
     --have either the same column or row. So
-    --we are essentially comparing the indicices that
+    --we are essentially comparing the indices that
     --vary. Ex. (0,3) < (0,4).
     orderedPendList = List.sort (Dict.keys pend)
   in
@@ -291,11 +315,11 @@ pendingTilesWordCheck (B pend mat) =
         let
           direction =
             (if i1 == i2 then Row else {-j1 == j2-} Col)
-          (fi, fj)= findFirstLetter i1 j1 direction (B pend mat)
+          (fi, fj) = findFirstLetter i1 j1 direction (B pend mat)
         in
           --Placeholder
-          if isPendContiguous fi fj direction orderedPendList (B pend mat) && isPendAdjacent orderedPendList mat then
-            (case (calculateWord fi fj direction (B pend mat), traversePlayedWord fi fj direction (B pend mat)) of
+          if isPendContiguous (fi, fj) direction orderedPendList (B pend mat) {- && isPendAdjacent orderedPendList mat -} then
+            (case (Debug.log "calcword" <| calculateWord (fi, fj) direction (B pend mat), {- traversePlayedWord fi fj direction dict (B pend mat)-} Nothing) of
               (_, Nothing) -> Nothing
               ((val1, word, mult), Just val2) ->
                 if RedBlackTree.member word dict then
@@ -334,37 +358,21 @@ findFirstLetter i j direction b =
 --and then moves to the right or down. If a blank tile is reache
 --but the pending list has not been entirely hit, then we know tha
 --the played word is not contiguous. Returns True if contiguous and False otherwise.
-isPendContiguous : Int -> Int -> Direction -> List (Int, Int) -> Board -> Bool
-isPendContiguous fi fj direction pendList b =
+isPendContiguous : (Int, Int) -> Direction -> List (Int, Int) -> Board -> Bool
+isPendContiguous (fi, fj) direction pendList b =
   case pendList of
     [] -> True
     p::ps ->
-      if direction == Row then
-        if (isCellEmpty fi fj b) then
-          --we know that there's a discontinuity, but the pending list has not been consumed
-          False
-        else if fi == 14 then
-          --we know that this must be the last tile and also pending (we are at the border)
-          True
-        else if p == (fi, fj) then
-          --consume the head of the pending list since the cell we are at contains p
-          isPendContiguous (fi+1) fj Row ps b
-        else
-          --don't consume the head since the cell we are at contains a permanent tile
-          isPendContiguous (fi+1) fj Row pendList b
+      if (isCellEmpty fi fj b) then
+        -- we know that there's a discontinuity, but the pending list has not been consumed
+        False
       else
-        if (isCellEmpty fi fj b) then
-          --we know that there's a discontinuity, but the pending list has not been consumed
-          False
-        else if fj == 14 then
-          --we know that this must be the last tile and also pending (we are at the border)
-          True
-        else if p == (fi, fj) then
-          --consume the head of the pending list since the cell we are at contains p
-          isPendContiguous fi (fj+1) Col ps b
-        else
-          --don't consume the head since the cell we are at contains a permanent tile
-          isPendContiguous fi (fj+1) Col pendList b
+        case stepIndex direction (fi, fj) of
+          Nothing ->
+            True
+          Just step ->
+            let rest = if p == (fi, fj) then ps else pendList in
+            isPendContiguous step direction rest b
 
 --Checks if any of the pending tiles are adjacent to a permanent cell. If yes, then return True. If not, return false.
 isPendAdjacent : List (Int, Int) -> Matrix Cell -> Bool
@@ -383,78 +391,50 @@ isPendAdjacent pendList mat =
           (_, (Just (C _ (Placed _)), _, _)) -> True
           (_, (_, Just (C _ (Placed _)), _)) -> True
           (_, (_, _, Just (C _ (Placed _)))) -> True
-          _ -> False || (isPendAdjacent ps mat)
+          _ -> isPendAdjacent ps mat
 
 --Given a starting position (fi, fj), goes left or down until a blank tile/the board boundary
 --is reached. Calculates the Just score if the word is valid, otherwise, return Nothing for the score.
 --Output is the score (not multiplied by word multipliers yet), the String, and the word multiplier
 --Note, letter multiplying is handled during traversal
-calculateWord : Int -> Int -> Direction -> Board -> (Int, String, Int)
-calculateWord fi fj direction (B pend mat) =
-  if direction == Row then
-    if isCellEmpty fi fj (B pend mat) || 15 <= fi then
-      (0, "" , 1)
-    else
+calculateWord : (Int, Int) -> Direction -> Board -> (Int, String, Int)
+calculateWord (fi, fj) direction (B pend mat) =
+  case stepIndex direction (fi, fj) of
+    Nothing ->
+      (0, "", 1)
+    Just step ->
       let
-        cell = Matrix.get fi fj mat
         --The tuple from this call
         (currVal, currString, currMult) =
-          (case cell of
-            Just (C Normal (Pending (Tile.Letter char val))) -> (val, String.fromChar char, 1)
-            --Use ! to denote blanks
-            Just (C Normal (Pending Tile.Blank)) -> (0, "!", 1)
-            Just (C Normal (Placed (Tile.Letter char val))) -> (val, String.fromChar char, 1)
-            Just (C Normal (Placed Tile.Blank)) -> (0, "!", 1)
-            Just (C (Premium (Letter mult)) (Pending (Tile.Letter char val))) -> ((val*mult), String.fromChar char, 1)
-            Just (C (Premium (Letter mult))  (Pending Tile.Blank)) -> (0, "!", 1)
-            Just (C (Premium (Letter mult)) (Placed (Tile.Letter char val))) -> ((val*mult), String.fromChar char, 1)
-            Just (C (Premium (Letter mult))  (Placed Tile.Blank)) -> (0, "", 1)
-            Just (C (Premium (Word mult)) (Pending (Tile.Letter char val))) -> (val, String.fromChar char, mult)
-            Just (C (Premium (Word mult))  (Pending Tile.Blank)) -> (0, "!", mult)
-            Just (C (Premium (Word mult)) (Placed (Tile.Letter char val))) -> (val, String.fromChar char, mult)
-            Just (C (Premium (Word mult))  (Placed Tile.Blank)) -> (0, "!", mult)
-            _ -> Debug.todo "calculateWord should not happen")
+          case Matrix.get fi fj mat of
+            Just (C kind state) ->
+              case getTile state of
+                Nothing ->
+                  (0, "", 1)
+                Just tile ->
+                  case kind of
+                    Normal ->
+                      (Tile.score tile, Tile.string tile, 1)
+                    Premium (Letter mult) ->
+                      (mult * Tile.score tile, Tile.string tile, 1)
+                    Premium (Word mult) ->
+                      (Tile.score tile, Tile.string tile, mult)
+            Nothing -> Debug.todo "calculateWord should not happen"
         --The tuple from recursive calls
-        (recurVal, recurString, recurMult) = calculateWord (fi+1) fj Row (B pend mat)
+        (recurVal, recurString, recurMult) =
+          calculateWord step direction (B pend mat)
       in
-        (recurVal+currVal, currString ++ recurString , recurMult*currMult)
-  else
-    if isCellEmpty fi fj (B pend mat) || 15 <= fj then
-      (0, "" , 1)
-    else
-      let
-        cell = Matrix.get fi fj mat
-        --The tuple from this call
-        (currVal, currString, currMult) =
-          (case cell of
-            Just (C Normal (Pending (Tile.Letter char val))) -> (val, String.fromChar char, 1)
-            --Use ! to denote blanks
-            Just (C Normal (Pending Tile.Blank)) -> (0, "!", 1)
-            Just (C Normal (Placed (Tile.Letter char val))) -> (val, String.fromChar char, 1)
-            Just (C Normal (Placed Tile.Blank)) -> (0, "!", 1)
-            Just (C (Premium (Letter mult)) (Pending (Tile.Letter char val))) -> ((val*mult), String.fromChar char, 1)
-            Just (C (Premium (Letter mult))  (Pending Tile.Blank)) -> (0, "!", 1)
-            Just (C (Premium (Letter mult)) (Placed (Tile.Letter char val))) -> ((val*mult), String.fromChar char, 1)
-            Just (C (Premium (Letter mult))  (Placed Tile.Blank)) -> (0, "", 1)
-            Just (C (Premium (Word mult)) (Pending (Tile.Letter char val))) -> (val, String.fromChar char, mult)
-            Just (C (Premium (Word mult))  (Pending Tile.Blank)) -> (0, "!", mult)
-            Just (C (Premium (Word mult)) (Placed (Tile.Letter char val))) -> (val, String.fromChar char, mult)
-            Just (C (Premium (Word mult))  (Placed Tile.Blank)) -> (0, "!", mult)
-            _ -> Debug.todo "calculateWord should not happen")
-        --The tuple from recursive calls
-        (recurVal, recurString, recurMult) = calculateWord fi (fj+1) Col (B pend mat)
-      in
-        (recurVal+currVal, currString ++ recurString , recurMult*currMult)
+        (recurVal + currVal, currString ++ recurString , recurMult * currMult)
 
 --Traverses the Pending word string (the first letter at (fi, fj)) and checks if the
 --perpendicular words are valid. Returns Just total_score of the perpendicular words are all valid. Nothing otherwise.
-traversePlayedWord : Int -> Int -> Direction -> Board -> Maybe Int
-traversePlayedWord fi fj direction (B pend mat) =
+traversePlayedWord : Int -> Int -> Direction -> Tree String -> Board -> Maybe Int
+traversePlayedWord fi fj direction dict (B pend mat) =
   if direction == Row then
     let
       (perpi, perpj) = findFirstLetter fi fj Col (B pend mat)
     in
-      case (traversePlayedWord fi (fj+1) Row (B pend mat), calculateWord perpi perpj Col (B pend mat)) of
+      case (traversePlayedWord fi (fj+1) Row dict (B pend mat), calculateWord (perpi, perpj) Col (B pend mat)) of
         (Nothing, _) -> Nothing
         (Just val1, (val2, word, mult)) ->
           if String.length word <= 1 then
@@ -469,7 +449,7 @@ traversePlayedWord fi fj direction (B pend mat) =
     let
       (perpi, perpj) = findFirstLetter fi fj Row (B pend mat)
     in
-      case (traversePlayedWord fi (fj+1) Col (B pend mat), calculateWord perpi perpj Row (B pend mat)) of
+      case (traversePlayedWord fi (fj+1) Col dict (B pend mat), calculateWord (perpi, perpj) Row (B pend mat)) of
         (Nothing, _) -> Nothing
         (Just val1, (val2, word, mult)) ->
           if String.length word <= 1 then

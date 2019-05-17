@@ -1,4 +1,4 @@
-module Tile exposing (Tile(..), blank, letter, view)
+module Tile exposing (Tile, blank, letter, score, char, string, view)
 
 import Html exposing (Html, Attribute)
 import Html.Events exposing (onClick)
@@ -39,6 +39,22 @@ blank = Blank
 
 letter : Char -> Tile
 letter c = Letter c (value c)
+
+score : Tile -> Int
+score tile =
+  case tile of
+    Blank      -> 0
+    Letter _ v -> v
+
+char : Tile -> Char
+char tile =
+  case tile of
+  Letter c _ -> c
+  Blank -> Debug.todo "Tile.char: Impossible"
+
+string : Tile -> String
+string =
+  String.fromChar << char
 
 view : Tile -> Html msg
 view tile =
