@@ -329,10 +329,10 @@ pendingTilesWordCheck dict (B pend mat) =
       (i1, j1)::[] ->
         --check both directions
         let 
-          (fir, fjr) = Debug.log "first" <| findFirstLetter (i1, j1) Row (B pend mat)
-          (fic, fjc) = Debug.log "first" <| findFirstLetter (i1, j1) Col (B pend mat)
+          (fir, fjr) = Debug.log "firstr" <| findFirstLetter (i1, j1) Row (B pend mat)
+          (fic, fjc) = Debug.log "firstc" <| findFirstLetter (i1, j1) Col (B pend mat)
           (valr, wordr, multr) = Debug.log "wordr" <| calculateWord (fir, fjr) Row (B pend mat)
-          (valc, wordc, multc) = Debug.log "wordc" <| calculateWord (fir, fjr) Col (B pend mat)
+          (valc, wordc, multc) = Debug.log "wordc" <| calculateWord (fic, fjc) Col (B pend mat)
           isWordr = RedBlackTree.member wordr dict
           isWordc = RedBlackTree.member wordc dict
         in
@@ -443,11 +443,25 @@ calculateWord : Index -> Direction -> Board -> (Int, String, Int)
 calculateWord (fi, fj) dir (B pend mat) =
   case nextIndex dir (fi, fj) of
     Nothing ->
-      (0, "", 1)
+      case Matrix.get fi fj mat of
+        Just (C kind state) ->
+          case getTile state of
+            Nothing ->
+              (0, "", 1)
+            Just tile ->
+              case kind of
+                Normal ->
+                  (Tile.score tile, Tile.string tile, 1)
+                Premium (Letter mult) ->
+                  (mult * Tile.score tile, Tile.string tile, 1)
+                Premium (Word mult) ->
+                  (Tile.score tile, Tile.string tile, mult)
+        Nothing ->
+          Debug.todo "calculateWord: Should not happen"
     Just next ->
       case Matrix.get fi fj mat of
         Just (C kind state) ->
-          case Debug.log "tile" <| getTile state of
+          case getTile state of
             Nothing ->
               (0, "", 1)
             Just tile ->
