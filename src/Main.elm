@@ -38,6 +38,7 @@ type alias Model =
   , bag : List Tile
   , held : Maybe (Int, Tile)
   , turnScore : Maybe Int
+  , boardEmpty : Bool
   }
 
 init : Flags -> ( Model, Cmd Msg )
@@ -48,6 +49,7 @@ init () = ( { dict = empty
             , held = Nothing
             --Changed from Nothing as that more accurately depicts a move without doing anything
             , turnScore = Just 0
+            , boardEmpty = True
             }
           , Http.get
             { url = "https://raw.githubusercontent.com/AHW214/ScrabbElm/master/assets/dictionary.txt"
@@ -118,7 +120,11 @@ update msg model =
     ClickedBoard i j ->
       let
         (newBoard, maybeRet) = Board.set i j model.held model.board
-        newScore = Board.pendingTilesWordCheck model.dict newBoard
+        newScore = 
+          Debug.log "SCORE" <| (if model.boardEmpty then         
+            Board.pendingTilesCheckFirstTurn model.dict newBoard
+          else
+            Board.pendingTilesWordCheck model.dict newBoard)
         newRack =
           case maybeRet of
             Nothing ->
@@ -139,11 +145,19 @@ update msg model =
       let
         (newRack, newBag) = Rack.replenish model.bag model.rack
         newBoard = Board.placePending model.board
+        boardE = 
+          (if model.boardEmpty == False then
+            False
+          else 
+            case Board.getTileAt 7 7 newBoard of
+              Just _ -> False
+              _ -> model.boardEmpty)
       in
         ( { model
             | board = newBoard
             , rack = newRack
             , bag = newBag
+            , boardEmpty = boardE
           }
         , Cmd.none
         )

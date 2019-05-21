@@ -1,4 +1,4 @@
-module Board exposing (Board, init, set, placePending, view, pendingTilesWordCheck, addTileToBoard)
+module Board exposing (Board, init, set, getTileAt, placePending, view, pendingTilesWordCheck, addTileToBoard, pendingTilesCheckFirstTurn)
 
 import Dict exposing (Dict)
 import Html exposing (Html, Attribute)
@@ -145,6 +145,12 @@ placePending (B pending matrix) =
         pending
   in
     B Dict.empty newMatrix
+
+getTileAt : Int -> Int -> Board -> Maybe Tile
+getTileAt i j (B _ mat) =
+  case Matrix.get i j mat of
+    Just (C _ state) -> getTile state 
+    _ -> Debug.todo "Should not happen" 
 
 
 type alias Properties msg
@@ -336,13 +342,20 @@ pendingTilesWordCheck dict (B pend mat) =
           isWordr = RedBlackTree.member wordr dict
           isWordc = RedBlackTree.member wordc dict
         in
-          --Don't have to check if length is <= 1 since the dictionary only has words of length 2 or more.
           if isWordr && isWordc then 
             Just (valr*multr + valc*multc)
           else if isWordr && (not isWordc) then 
-            Just (valr*multr)
+            --Need to check if the column word is of length 1
+            if String.length wordc <= 1 then
+              Just (valr*multr)
+            else
+              Nothing
           else if (not isWordr) && isWordc then 
-            Just (valc*multc)
+            --need to check if the row word is of length 1
+            if String.length wordr <= 1 then
+              Just (valc*multc)
+            else
+              Nothing
           else 
             Nothing
       (i1, j1)::(i2, j2)::_ ->
@@ -355,7 +368,7 @@ pendingTilesWordCheck dict (B pend mat) =
           (fi, fj) =
             Debug.log "first" <| findFirstLetter (i1, j1) dir (B pend mat)
         in
-          if Debug.log "cont" <| isPendContiguous (fi, fj) dir orderedPendList (B pend mat) {- && isPendAdjacent orderedPendList mat -} then
+          if Debug.log "cont" <| isPendContiguous (fi, fj) dir orderedPendList (B pend mat) && isPendAdjacent orderedPendList mat then
             let
               (val1, word, mult) = Debug.log "word" <| calculateWord (fi, fj) dir (B pend mat)
               traversed = Debug.log "traverse" <| traversePlayedWord (fi, fj) dir (String.length word) dict (B pend mat)
@@ -370,6 +383,50 @@ pendingTilesWordCheck dict (B pend mat) =
                     Nothing
           else
             Nothing
+
+
+pendingTilesCheckFirstTurn : Tree String -> Board -> Maybe Int
+pendingTilesCheckFirstTurn dict (B pend mat) =
+  let
+    --ordered from least to greatest. Note that because of
+    --how a valid "pend" is built, the indices will
+    --have either the same column or row. So
+    --we are essentially comparing the indices that
+    --vary. Ex. (0,3) < (0,4).
+    orderedPendList = List.sort (Dict.keys pend)
+  in
+    case orderedPendList of
+      [] ->
+        --Changed to Just 0 from Nothing as it more accurately models a "no move"
+        Just 0
+      (i1, j1)::[] ->
+        --check both directions
+        Nothing
+      (i1, j1)::(i2, j2)::_ ->
+        let
+          dir =
+            if i1 == i2 then
+              Row
+            else
+              Col
+          (fi, fj) =
+            Debug.log "first" <| findFirstLetter (i1, j1) dir (B pend mat)
+        in
+          if Debug.log "cont" <| isPendContiguous (fi, fj) dir orderedPendList (B pend mat)  && isPendCentered orderedPendList then
+            let 
+              (val, word, mult) = calculateWord (fi, fj) dir (B pend mat)
+            in
+              if RedBlackTree.member word dict then
+                Just (val*mult)
+              else
+                Nothing
+          else
+            Nothing
+
+--Checks if any of the pending tiles are in the center cell
+isPendCentered : List Index -> Bool
+isPendCentered pendList = 
+  List.foldl (\(i, j) acc -> ((i == 7) && (j == 7)) || acc) False pendList 
 
 --NOTE: ONLY CALL THE FUNCTIONS BELOW AMONG EACH OTHER OR IN THE THIRD
 --CASE STATEMENT OF pendingTilesWordCheck

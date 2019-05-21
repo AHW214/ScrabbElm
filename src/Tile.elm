@@ -19,6 +19,17 @@ points =
   , ( 10, [ 'Q', 'Z' ] )
   ]
 
+pointsLower : List (Int, List Char)
+pointsLower =
+  [ ( 1,  [ 'e', 'a', 'i', 'o', 'n', 'r', 't', 'l', 's', 'u' ] )
+  , ( 2,  [ 'd', 'g' ] )
+  , ( 3,  [ 'b', 'c', 'm', 'p' ] )
+  , ( 4,  [ 'f', 'h', 'v', 'w', 'y' ] )
+  , ( 5,  [ 'k' ] )
+  , ( 8,  [ 'j', 'x' ] )
+  , ( 10, [ 'q', 'z' ] )
+  ]
+
 -- to avoid redundant case expression i guess
 value : Char -> Int
 value =
@@ -32,7 +43,7 @@ value =
           else
             check rest c
   in
-    check points
+    check pointsLower
 
 blank : Tile
 blank = Blank
