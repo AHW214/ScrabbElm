@@ -325,8 +325,25 @@ pendingTilesWordCheck dict (B pend mat) =
     case orderedPendList of
       [] ->
         Nothing
-      t::[] ->
-        Nothing
+      (i1, j1)::[] ->
+        --check both directions
+        let 
+          (fir, fjr) = Debug.log "first" <| findFirstLetter (i1, j1) Row (B pend mat)
+          (fic, fjc) = Debug.log "first" <| findFirstLetter (i1, j1) Col (B pend mat)
+          (valr, wordr, multr) = Debug.log "wordr" <| calculateWord (fir, fjr) Row (B pend mat)
+          (valc, wordc, multc) = Debug.log "wordc" <| calculateWord (fir, fjr) Row (B pend mat)
+          isWordr = RedBlackTree.member wordr dict
+          isWordc = RedBlackTree.member wordc dict
+        in
+          --Don't have to check if length is <= 1 since the dictionary only has words of length 2 or more.
+          if isWordr && isWordc then 
+            Just (valr*multr + valc*multc)
+          else if isWordr && (not isWordc) then 
+            Just (valr*multr)
+          else if (not isWordr) && isWordc then 
+            Just (valc*multc)
+          else 
+            Nothing
       (i1, j1)::(i2, j2)::_ ->
         let
           dir =
