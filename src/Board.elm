@@ -324,14 +324,15 @@ pendingTilesWordCheck dict (B pend mat) =
   in
     case orderedPendList of
       [] ->
-        Nothing
+        --Changed to Just 0 from Nothing as it more accurately models a "no move"
+        Just 0
       (i1, j1)::[] ->
         --check both directions
         let 
           (fir, fjr) = Debug.log "first" <| findFirstLetter (i1, j1) Row (B pend mat)
           (fic, fjc) = Debug.log "first" <| findFirstLetter (i1, j1) Col (B pend mat)
           (valr, wordr, multr) = Debug.log "wordr" <| calculateWord (fir, fjr) Row (B pend mat)
-          (valc, wordc, multc) = Debug.log "wordc" <| calculateWord (fir, fjr) Row (B pend mat)
+          (valc, wordc, multc) = Debug.log "wordc" <| calculateWord (fir, fjr) Col (B pend mat)
           isWordr = RedBlackTree.member wordr dict
           isWordc = RedBlackTree.member wordc dict
         in
@@ -444,15 +445,14 @@ calculateWord (fi, fj) dir (B pend mat) =
     Nothing ->
       (0, "", 1)
     Just next ->
-      let
-        --The tuple from this call
-        (currVal, currString, currMult) =
-          case Matrix.get fi fj mat of
-            Just (C kind state) ->
-              case getTile state of
-                Nothing ->
-                  (0, "", 1)
-                Just tile ->
+      case Matrix.get fi fj mat of
+        Just (C kind state) ->
+          case Debug.log "tile" <| getTile state of
+            Nothing ->
+              (0, "", 1)
+            Just tile ->
+              let
+                (currVal, currString, currMult) = 
                   case kind of
                     Normal ->
                       (Tile.score tile, Tile.string tile, 1)
@@ -460,13 +460,13 @@ calculateWord (fi, fj) dir (B pend mat) =
                       (mult * Tile.score tile, Tile.string tile, 1)
                     Premium (Word mult) ->
                       (Tile.score tile, Tile.string tile, mult)
-            Nothing ->
-              Debug.todo "calculateWord: Should not happen"
-        --The tuple from recursive calls
-        (recurVal, recurString, recurMult) =
-          calculateWord next dir (B pend mat)
-      in
-        (recurVal + currVal, currString ++ recurString , recurMult * currMult)
+                (recurVal, recurString, recurMult) =
+                  calculateWord next dir (B pend mat)
+              in
+                (recurVal + currVal, currString ++ recurString , recurMult * currMult)
+        Nothing ->
+          Debug.todo "calculateWord: Should not happen"
+    --The tuple from recursive calls
 
 --Traverses the Pending word string (the first letter at (fi, fj)) and checks if the
 --perpendicular words are valid. Returns Just total_score of the perpendicular words are all valid. Nothing otherwise.

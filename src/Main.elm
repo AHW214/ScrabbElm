@@ -46,7 +46,8 @@ init () = ( { dict = empty
             , rack = Rack.empty
             , bag = List.map Tile.letter (String.toList "pasteheedoodefghijklmnopqrstuvwxyz")
             , held = Nothing
-            , turnScore = Nothing
+            --Changed from Nothing as that more accurately depicts a move without doing anything
+            , turnScore = Just 0
             }
           , Http.get
             { url = "https://raw.githubusercontent.com/AHW214/ScrabbElm/master/assets/dictionary.txt"
