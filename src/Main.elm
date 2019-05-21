@@ -45,7 +45,7 @@ init : Flags -> ( Model, Cmd Msg )
 init () = ( { dict = empty
             , board = Board.init
             , rack = Rack.empty
-            , bag = List.map Tile.letter (String.toList "pasteheedoodefghijklmnopqrstuvwxyz")
+            , bag = List.map Tile.letter (String.toList "hornfarmpastemobbitamsndlnfdsl")
             , held = Nothing
             --Changed from Nothing as that more accurately depicts a move without doing anything
             , turnScore = Just 0

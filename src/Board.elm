@@ -138,8 +138,9 @@ placePending (B pending matrix) =
         (\(i, j) _ m ->
           case Matrix.get i j m of
             Nothing   -> m
-            Just cell ->
-              Matrix.set i j (place cell) m
+            --Modified to deactivate multipliers once used.
+            Just (C _ state) ->
+              Matrix.set i j (place (C Normal state)) m
         )
         matrix
         pending
@@ -371,7 +372,7 @@ pendingTilesWordCheck dict (B pend mat) =
           if Debug.log "cont" <| isPendContiguous (fi, fj) dir orderedPendList (B pend mat) && isPendAdjacent orderedPendList mat then
             let
               (val1, word, mult) = Debug.log "word" <| calculateWord (fi, fj) dir (B pend mat)
-              traversed = Debug.log "traverse" <| traversePlayedWord (fi, fj) dir (String.length word) dict (B pend mat)
+              traversed = Debug.log "traverse" <| traversePlayedWord orderedPendList dir dict (B pend mat)
             in
               case traversed of
                 Nothing ->
@@ -539,21 +540,19 @@ calculateWord (fi, fj) dir (B pend mat) =
           Debug.todo "calculateWord: Should not happen"
     --The tuple from recursive calls
 
---Traverses the Pending word string (the first letter at (fi, fj)) and checks if the
+--Traverses the Pending characters and checks if the
 --perpendicular words are valid. Returns Just total_score of the perpendicular words are all valid. Nothing otherwise.
-traversePlayedWord : Index -> Direction -> Int -> Tree String -> Board -> Maybe Int
-traversePlayedWord index dir len dict (B pend mat) =
-  case (len, nextIndex dir index) of
-    (0, _) ->
+traversePlayedWord : List (Int, Int) -> Direction -> Tree String -> Board -> Maybe Int
+traversePlayedWord pendList dir dict (B pend mat) =
+  case pendList of
+    [] ->
       Just 0
-    (_, Nothing) ->
-      Just 0
-    (_, Just next) ->
+    index::pendRest ->
       let
         perp = perpDir dir
         pIndex = findFirstLetter index perp (B pend mat)
       in
-        case (traversePlayedWord next dir (len - 1) dict (B pend mat), calculateWord pIndex perp (B pend mat)) of
+        case (traversePlayedWord pendRest dir dict (B pend mat), calculateWord pIndex perp (B pend mat)) of
           (Nothing, _) ->
             Nothing
           (Just val1, (val2, word, mult)) ->
