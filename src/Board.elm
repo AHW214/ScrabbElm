@@ -130,21 +130,24 @@ set i j held (B pending matrix) =
         _ -> (B pending matrix, Nothing)
 
 
-placePending : Board -> Board
+placePending : Board -> (Board, Int)
 placePending (B pending matrix) =
   let
-    newMatrix =
+    placer =
       Dict.foldl
-        (\(i, j) _ m ->
+        (\(i, j) _ (m, p) ->
           case Matrix.get i j m of
-            Nothing   -> m
+            Nothing ->
+              (m, p)
             Just cell ->
-              Matrix.set i j (place cell) m
+              ( Matrix.set i j (place cell) m
+              , p + 1
+              )
         )
-        matrix
-        pending
   in
-    B Dict.empty newMatrix
+    pending
+      |> placer (matrix, 0)
+      |> Tuple.mapFirst (B Dict.empty)
 
 getTileAt : Int -> Int -> Board -> Maybe Tile
 getTileAt i j (B _ mat) =

@@ -1,4 +1,4 @@
-module Rack exposing (Rack, empty, init, take, return, replenish, view)
+module Rack exposing (Rack, size, empty, init, take, return, replenish, view)
 
 import Array exposing (Array)
 import Html exposing (Html)
