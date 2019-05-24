@@ -1,4 +1,4 @@
-module Board exposing (Board, init, set, getTileAt, placePending, view, pendingTilesWordCheck, addTileToBoard, pendingTilesCheckFirstTurn)
+module Board exposing (Board, init, set, getTileAt, placePending, view, pendingTilesWordCheck, pendingTilesCheckFirstTurn)
 
 import Dict exposing (Dict)
 import Html exposing (Html, Attribute)
@@ -46,7 +46,7 @@ place : Cell -> Cell
 place (C kind state) =
   case state of
     Pending tile ->
-      C kind (Placed tile)
+      C Normal (Placed tile)
     _ ->
       C kind state
 
@@ -138,9 +138,8 @@ placePending (B pending matrix) =
         (\(i, j) _ m ->
           case Matrix.get i j m of
             Nothing   -> m
-            --Modified to deactivate multipliers once used.
-            Just (C _ state) ->
-              Matrix.set i j (place (C Normal state)) m
+            Just cell ->
+              Matrix.set i j (place cell) m
         )
         matrix
         pending
@@ -150,8 +149,10 @@ placePending (B pending matrix) =
 getTileAt : Int -> Int -> Board -> Maybe Tile
 getTileAt i j (B _ mat) =
   case Matrix.get i j mat of
-    Just (C _ state) -> getTile state 
-    _ -> Debug.todo "Should not happen" 
+    Just (C _ state) ->
+      getTile state
+    _ ->
+      Debug.todo "Should not happen"
 
 
 type alias Properties msg
@@ -168,8 +169,10 @@ viewPremium event mult =
   let
     (num, kind, str) =
       case mult of
-        Letter n -> (String.fromInt n, "letter", "x LS")
-        Word n   -> (String.fromInt n, "word", "x WS")
+        Letter n ->
+          (String.fromInt n, "letter", "x LS")
+        Word n ->
+          (String.fromInt n, "word", "x WS")
   in
       ( [ class ("premium-" ++ kind ++ "-" ++ num), onClick event ]
       , [ Html.text (num ++ str) ]
@@ -227,7 +230,18 @@ view event held (B pending matrix) =
 --direction the placed letters go
 --Row is the first entry and Column is the second entry
 --in Matrix indexing
-type Direction = Row | Col
+type Direction
+  = Row
+  | Col
+
+getDir : Index -> Index -> Maybe Direction
+getDir (i1, j1) (i2, j2) =
+  if i1 == i2 then
+    Just Row
+  else if j1 == j2 then
+    Just Col
+  else
+    Nothing
 
 perpDir : Direction -> Direction
 perpDir dir =
@@ -268,10 +282,12 @@ getTile state =
       Just tile
 
 ---------------------------------------------------Placing Tiles on the Board as Pending ------------------------------------
+{-
 --Decides whether it is ok to place a tile at the index (i,j) in the board
 okPlace : Index -> Board -> Bool
 okPlace index b =
   isValidTilePlacement index b && isCellEmpty index b
+-}
 
 --Decides if the index (i,j) in the board is empty
 isCellEmpty : Index -> Board -> Bool
@@ -282,13 +298,14 @@ isCellEmpty (i, j) (B _ mat) =
     _ ->
       False
 
+{-
 --Checks if placing the tile at index (i,j) is valid:
 --I.e. if the tile is in the same row or column as
 --the already pending tiles
 isValidTilePlacement : Index -> Board -> Bool
 isValidTilePlacement (i, j) (B pend _) =
   let
-    --Easier to make the dirct into a list
+    --Easier to make the dict into a list
     pendList = Dict.keys pend
     (inRow, inCol) =
       List.foldl (\(i2, j2) (r, c) -> (i == i2 && r, j == j2 && c)) (True, True) pendList
@@ -308,6 +325,7 @@ addTileToBoard (i, j) rackIndex tile (B pend mat) =
         B (Dict.insert (i, j) rackIndex pend) (Matrix.set i j (C kind (Pending tile)) mat)
   else
     B pend mat
+  -}
 
 
 --------------------------------------------Check Pending Tiles For Validity -----------------------------------------
@@ -320,114 +338,124 @@ addTileToBoard (i, j) rackIndex tile (B pend mat) =
   are not contiguous, then return nothing.
  THIS IS THE FUNCTION TO USE WHEN CHECKING IF A PLAY IS LEGAL-}
 pendingTilesWordCheck : Tree String -> Board -> Maybe Int
-pendingTilesWordCheck dict (B pend mat) =
+pendingTilesWordCheck dict board =
   let
     --ordered from least to greatest. Note that because of
     --how a valid "pend" is built, the indices will
     --have either the same column or row. So
     --we are essentially comparing the indices that
     --vary. Ex. (0,3) < (0,4).
+    (B pend mat) = board
     orderedPendList = List.sort (Dict.keys pend)
   in
     case orderedPendList of
       [] ->
         --Changed to Just 0 from Nothing as it more accurately models a "no move"
         Just 0
-      (i1, j1)::[] ->
+      index::[] ->
         --check both directions
-        let 
-          (fir, fjr) = Debug.log "firstr" <| findFirstLetter (i1, j1) Row (B pend mat)
-          (fic, fjc) = Debug.log "firstc" <| findFirstLetter (i1, j1) Col (B pend mat)
-          (valr, wordr, multr) = Debug.log "wordr" <| calculateWord (fir, fjr) Row (B pend mat)
-          (valc, wordc, multc) = Debug.log "wordc" <| calculateWord (fic, fjc) Col (B pend mat)
-          isWordr = RedBlackTree.member wordr dict
-          isWordc = RedBlackTree.member wordc dict
+        let
+          firstRow = Debug.log "firstr" <| findFirstLetter index Row board
+          firstCol = Debug.log "firstc" <| findFirstLetter index Col board
+          (valRow, wordRow, multRow) = Debug.log "wordr" <| calculateWord firstRow Row board
+          (valCol, wordCol, multCol) = Debug.log "wordc" <| calculateWord firstCol Col board
+          checkRow = RedBlackTree.member wordRow dict
+          checkCol = RedBlackTree.member wordCol dict
         in
-          if isWordr && isWordc then 
+          if String.length wordCol == 1 && checkRow then
+            Just (valRow * multRow)
+          else if String.length wordRow == 1 && checkCol then
+            Just (valCol * multCol)
+          else if checkRow && checkCol then
+            Just (valRow * multRow + valCol * multCol)
+          else
+            Nothing
+      {-
+        in
+          if isWordr && isWordc then
             Just (valr*multr + valc*multc)
-          else if isWordr && (not isWordc) then 
+          else if isWordr && (not isWordc) then
             --Need to check if the column word is of length 1
             if String.length wordc <= 1 then
               Just (valr*multr)
             else
               Nothing
-          else if (not isWordr) && isWordc then 
+          else if (not isWordr) && isWordc then
             --need to check if the row word is of length 1
             if String.length wordr <= 1 then
               Just (valc*multc)
             else
               Nothing
-          else 
-            Nothing
-      (i1, j1)::(i2, j2)::_ ->
-        let
-          dir =
-            if i1 == i2 then
-              Row
-            else
-              Col
-          (fi, fj) =
-            Debug.log "first" <| findFirstLetter (i1, j1) dir (B pend mat)
-        in
-          if Debug.log "cont" <| isPendContiguous (fi, fj) dir orderedPendList (B pend mat) && isPendAdjacent orderedPendList mat then
-            let
-              (val1, word, mult) = Debug.log "word" <| calculateWord (fi, fj) dir (B pend mat)
-              traversed = Debug.log "traverse" <| traversePlayedWord orderedPendList dir dict (B pend mat)
-            in
-              case traversed of
-                Nothing ->
-                  Nothing
-                Just val2 ->
-                  if RedBlackTree.member word dict then
-                    Just (mult * val1 + val2)
-                  else
-                    Nothing
           else
             Nothing
+      -}
+      index1::index2::_ ->
+          getDir index1 index2
+            |> Maybe.andThen (\dir ->
+              let
+                firstIndex =
+                  Debug.log "first" <| findFirstLetter index1 dir board
+              in
+                if Debug.log "cont" <| isPendContiguous firstIndex dir orderedPendList board && isPendAdjacent orderedPendList mat then
+                  let
+                    (val1, word, mult) =
+                      Debug.log "word" <| calculateWord firstIndex dir board
+                    traversed =
+                      Debug.log "traverse" <| traversePlayedWord orderedPendList dir dict board
+                  in
+                    case traversed of
+                      Nothing ->
+                        Nothing
+                      Just val2 ->
+                        if RedBlackTree.member word dict then
+                          Just (mult * val1 + val2)
+                        else
+                          Nothing
+                else
+                  Nothing
+              )
 
 
 pendingTilesCheckFirstTurn : Tree String -> Board -> Maybe Int
-pendingTilesCheckFirstTurn dict (B pend mat) =
+pendingTilesCheckFirstTurn dict board =
   let
     --ordered from least to greatest. Note that because of
     --how a valid "pend" is built, the indices will
     --have either the same column or row. So
     --we are essentially comparing the indices that
     --vary. Ex. (0,3) < (0,4).
+    (B pend _) = board
     orderedPendList = List.sort (Dict.keys pend)
   in
     case orderedPendList of
       [] ->
         --Changed to Just 0 from Nothing as it more accurately models a "no move"
         Just 0
-      (i1, j1)::[] ->
-        --check both directions
+      _::[] ->
         Nothing
-      (i1, j1)::(i2, j2)::_ ->
-        let
-          dir =
-            if i1 == i2 then
-              Row
-            else
-              Col
-          (fi, fj) =
-            Debug.log "first" <| findFirstLetter (i1, j1) dir (B pend mat)
-        in
-          if Debug.log "cont" <| isPendContiguous (fi, fj) dir orderedPendList (B pend mat)  && isPendCentered orderedPendList then
-            let 
-              (val, word, mult) = calculateWord (fi, fj) dir (B pend mat)
+      index1::index2::_ ->
+        getDir index1 index2
+          |> Maybe.andThen (\dir ->
+            let
+              firstIndex =
+                Debug.log "first" <| findFirstLetter index1 dir board
             in
-              if RedBlackTree.member word dict then
-                Just (val*mult)
+              if Debug.log "cont" <| isPendContiguous firstIndex dir orderedPendList board && isPendCentered orderedPendList then
+                let
+                  (val, word, mult) = calculateWord firstIndex dir board
+                in
+                  if RedBlackTree.member word dict then
+                    Just (val * mult)
+                  else
+                    Nothing
               else
                 Nothing
-          else
-            Nothing
+            )
 
 --Checks if any of the pending tiles are in the center cell
 isPendCentered : List Index -> Bool
-isPendCentered pendList = 
-  List.foldl (\(i, j) acc -> ((i == 7) && (j == 7)) || acc) False pendList 
+isPendCentered =
+  List.any (\(i, j) -> i == 7 && j == 7)
 
 --NOTE: ONLY CALL THE FUNCTIONS BELOW AMONG EACH OTHER OR IN THE THIRD
 --CASE STATEMENT OF pendingTilesWordCheck
@@ -438,7 +466,7 @@ isPendCentered pendList =
 --find the index of the first letter in the direction specified
 --Note that the pending letters must for a contiguous
 --"word" with permanent letters allowed to bridge groups of pending letter
-findFirstLetter : Index-> Direction -> Board -> Index
+findFirstLetter : Index -> Direction -> Board -> Index
 findFirstLetter index dir board =
   case prevIndex dir index of
     Nothing ->
@@ -453,7 +481,7 @@ findFirstLetter index dir board =
 --slightly inefficient but oh well. The words are so small that
 --we can consider this O(1) time.
 --Given a pending tile set, takes in the index (fi, fj) of the first letter of the string
---and then moves to the right or down. If a blank tile is reache
+--and then moves to the right or down. If a blank tile is reached
 --but the pending list has not been entirely hit, then we know tha
 --the played word is not contiguous. Returns True if contiguous and False otherwise.
 isPendContiguous : Index -> Direction -> List Index -> Board -> Bool
@@ -499,23 +527,9 @@ isPendAdjacent pendList mat =
 --Note, letter multiplying is handled during traversal
 calculateWord : Index -> Direction -> Board -> (Int, String, Int)
 calculateWord (fi, fj) dir (B pend mat) =
-  case nextIndex dir (fi, fj) of
+  case stepIndex ((>) size) ((+) 1) dir (fi, fj) of
     Nothing ->
-      case Matrix.get fi fj mat of
-        Just (C kind state) ->
-          case getTile state of
-            Nothing ->
-              (0, "", 1)
-            Just tile ->
-              case kind of
-                Normal ->
-                  (Tile.score tile, Tile.string tile, 1)
-                Premium (Letter mult) ->
-                  (mult * Tile.score tile, Tile.string tile, 1)
-                Premium (Word mult) ->
-                  (Tile.score tile, Tile.string tile, mult)
-        Nothing ->
-          Debug.todo "calculateWord: Should not happen"
+      (0, "", 1)
     Just next ->
       case Matrix.get fi fj mat of
         Just (C kind state) ->
@@ -524,7 +538,7 @@ calculateWord (fi, fj) dir (B pend mat) =
               (0, "", 1)
             Just tile ->
               let
-                (currVal, currString, currMult) = 
+                (currVal, currString, currMult) =
                   case kind of
                     Normal ->
                       (Tile.score tile, Tile.string tile, 1)
@@ -543,16 +557,16 @@ calculateWord (fi, fj) dir (B pend mat) =
 --Traverses the Pending characters and checks if the
 --perpendicular words are valid. Returns Just total_score of the perpendicular words are all valid. Nothing otherwise.
 traversePlayedWord : List (Int, Int) -> Direction -> Tree String -> Board -> Maybe Int
-traversePlayedWord pendList dir dict (B pend mat) =
+traversePlayedWord pendList dir dict board =
   case pendList of
     [] ->
       Just 0
     index::pendRest ->
       let
         perp = perpDir dir
-        pIndex = findFirstLetter index perp (B pend mat)
+        pIndex = findFirstLetter index perp board
       in
-        case (traversePlayedWord pendRest dir dict (B pend mat), calculateWord pIndex perp (B pend mat)) of
+        case (traversePlayedWord pendRest dir dict board, calculateWord pIndex perp board) of
           (Nothing, _) ->
             Nothing
           (Just val1, (val2, word, mult)) ->

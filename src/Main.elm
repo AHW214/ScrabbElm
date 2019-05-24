@@ -120,8 +120,8 @@ update msg model =
     ClickedBoard i j ->
       let
         (newBoard, maybeRet) = Board.set i j model.held model.board
-        newScore = 
-          Debug.log "SCORE" <| (if model.boardEmpty then         
+        newScore =
+          Debug.log "SCORE" <| (if model.boardEmpty then
             Board.pendingTilesCheckFirstTurn model.dict newBoard
           else
             Board.pendingTilesWordCheck model.dict newBoard)
@@ -145,13 +145,15 @@ update msg model =
       let
         (newRack, newBag) = Rack.replenish model.bag model.rack
         newBoard = Board.placePending model.board
-        boardE = 
-          (if model.boardEmpty == False then
+        boardE =
+          if model.boardEmpty == False then
             False
-          else 
+          else
             case Board.getTileAt 7 7 newBoard of
-              Just _ -> False
-              _ -> model.boardEmpty)
+              Just _ ->
+                False
+              _ ->
+                model.boardEmpty
       in
         ( { model
             | board = newBoard
