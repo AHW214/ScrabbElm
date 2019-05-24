@@ -6,6 +6,13 @@ body {
   position: relative;
 }
 
+#score {
+  position: absolute;
+  right: 20%;
+  color: #FFFFFF;
+  font-size: 100px;
+}
+
 .centered {
   position: absolute;
   left: 50%;

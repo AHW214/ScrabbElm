@@ -1,4 +1,4 @@
-module Tile exposing (Tile(..), blank, letter, view)
+module Tile exposing (Tile, blank, letter, score, char, string, view)
 
 import Html exposing (Html, Attribute)
 import Html.Events exposing (onClick)
@@ -19,6 +19,17 @@ points =
   , ( 10, [ 'Q', 'Z' ] )
   ]
 
+pointsLower : List (Int, List Char)
+pointsLower =
+  [ ( 1,  [ 'e', 'a', 'i', 'o', 'n', 'r', 't', 'l', 's', 'u' ] )
+  , ( 2,  [ 'd', 'g' ] )
+  , ( 3,  [ 'b', 'c', 'm', 'p' ] )
+  , ( 4,  [ 'f', 'h', 'v', 'w', 'y' ] )
+  , ( 5,  [ 'k' ] )
+  , ( 8,  [ 'j', 'x' ] )
+  , ( 10, [ 'q', 'z' ] )
+  ]
+
 -- to avoid redundant case expression i guess
 value : Char -> Int
 value =
@@ -32,13 +43,29 @@ value =
           else
             check rest c
   in
-    check points
+    check pointsLower
 
 blank : Tile
 blank = Blank
 
 letter : Char -> Tile
 letter c = Letter c (value c)
+
+score : Tile -> Int
+score tile =
+  case tile of
+    Blank      -> 0
+    Letter _ v -> v
+
+char : Tile -> Char
+char tile =
+  case tile of
+  Letter c _ -> c
+  Blank -> Debug.todo "Tile.char: Impossible"
+
+string : Tile -> String
+string =
+  String.fromChar << char
 
 view : Tile -> Html msg
 view tile =

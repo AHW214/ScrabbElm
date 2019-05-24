@@ -4,8 +4,8 @@ module Main exposing (..)
 
 import Browser
 import Browser.Events
-import Html
-import Html.Events
+import Html exposing (Html)
+import Html.Events exposing (onClick)
 import Html.Attributes exposing (id, class)
 import Http
 
@@ -37,14 +37,21 @@ type alias Model =
   , rack : Rack
   , bag : List Tile
   , held : Maybe (Int, Tile)
+  , turnScore : Maybe Int
+  , totalScore : Int
+  , boardEmpty : Bool
   }
 
 init : Flags -> ( Model, Cmd Msg )
 init () = ( { dict = empty
             , board = Board.init
             , rack = Rack.empty
-            , bag = List.map Tile.letter (String.toList "abcdefghijklmnopqrstuvwxyz")
+            , bag = List.map Tile.letter (String.toList "historyhornfarmpastemobbitamsndlnfdsl")
             , held = Nothing
+            --Changed from Nothing as that more accurately depicts a move without doing anything
+            , turnScore = Just 0
+            , totalScore = 0
+            , boardEmpty = True
             }
           , Http.get
             { url = "https://raw.githubusercontent.com/AHW214/ScrabbElm/master/assets/dictionary.txt"
@@ -60,6 +67,7 @@ type Msg
   | GotBag (List Tile)
   | ClickedRack Int
   | ClickedBoard Int Int
+  | PassTurn
   | EndTurn
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -114,7 +122,18 @@ update msg model =
 
     ClickedBoard i j ->
       let
-        (newBoard, maybeRet) = Board.set i j model.held model.board
+        (newBoard, maybeRet) =
+          Board.set i j model.held model.board
+
+        validator =
+          if model.boardEmpty then
+            Board.pendingTilesCheckFirstTurn
+          else
+            Board.pendingTilesWordCheck
+
+        newTurnScore =
+          Debug.log "SCORE" <| validator model.dict newBoard
+
         newRack =
           case maybeRet of
             Nothing ->
@@ -126,22 +145,56 @@ update msg model =
             | board = newBoard
             , held = Nothing
             , rack = newRack
+            , turnScore = newTurnScore
           }
         , Cmd.none
         )
 
     EndTurn ->
       let
-        (newRack, newBag) = Rack.replenish model.bag model.rack
-        newBoard = Board.placePending model.board
+        (newRack, newBag) =
+          Rack.replenish model.bag model.rack
+
+        (newBoard, placed) =
+          Board.placePending model.board
+
+        turnScore =
+          case model.turnScore of
+            Nothing -> 0
+            Just score ->
+              if placed == Rack.size then
+                score + 50
+              else
+                score
+
+        newScore =
+          model.totalScore + turnScore
+
+        boardE =
+          if model.boardEmpty == False then
+            False
+          else
+            case Board.getTileAt 7 7 newBoard of
+              Just _ ->
+                False
+              _ ->
+                model.boardEmpty
       in
         ( { model
             | board = newBoard
             , rack = newRack
             , bag = newBag
+            , turnScore = Just 0
+            , totalScore = Debug.log "TOTAL SCORE" newScore
+            , boardEmpty = boardE
           }
         , Cmd.none
         )
+
+    PassTurn ->
+      ( model
+      , Cmd.none
+      )
 
 
 loadDictionary : String -> Tree String
@@ -156,6 +209,25 @@ subscriptions model =
 
 -- View
 
+viewTurn : Maybe Int -> Html Msg
+viewTurn turnScore =
+  let
+    (attr, html) =
+      case turnScore of
+        Nothing ->
+          ([], [ Html.text "Finish your move..." ])
+        Just score ->
+          if score > 0 then
+            ([ onClick EndTurn ], [ Html.text "End turn." ])
+          else
+            ([ onClick PassTurn ], [ Html.text "Pass turn." ])
+  in
+    Html.button attr html
+
+viewScore : Int -> Html Msg
+viewScore s =
+  Html.div [ id "score" ] [ Html.text (String.fromInt s) ]
+
 view : Model -> Browser.Document Msg
 view model =
   { title = "ScrabbElm"
@@ -167,8 +239,9 @@ view model =
             [ Board.view ClickedBoard model.held model.board
             , Rack.view ClickedRack model.rack
             , Html.button [ Html.Events.onClick (GotBag model.bag) ] [ Html.text "init rack" ]
-            , Html.button [ Html.Events.onClick EndTurn ] [ Html.text "end turn" ]
+            , viewTurn model.turnScore
             ]
+          , viewScore model.totalScore
           ]
       ]
   }
