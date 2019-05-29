@@ -5,10 +5,14 @@
 		<meta charset="UTF-8">
 		<title>ScrabbElm</title>
 		<link rel="stylesheet" href="styles.css">
+		<script src="src/js/webSocket.js"></script>
 		<script src="main.js"></script>
 	</head>
 
 	<body>
-		<script>var app = Elm.Main.init();</script>
+		<script>
+			var app = Elm.Main.init();
+			bind(app);
+		</script>
 	</body>
 </html>
