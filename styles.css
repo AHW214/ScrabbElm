@@ -44,7 +44,7 @@ body {
   opacity: 0.5;
 }
 
-.rack.discard > .chosen > .tile {
+.rack.exchange > .chosen > .tile {
   background-color: #FF0000;
 }
 

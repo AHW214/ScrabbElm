@@ -66,8 +66,9 @@ type Msg
   = GotText (Result Http.Error String)
   | GotBag (List Tile)
   | ChoseRackPlace Int
-  | ChoseRackDiscard Int
+  | ChoseRackExchange Int
   | ClickedBoard Int Int
+  | ExchangeTiles
   | PassTurn
   | EndTurn
 
@@ -121,10 +122,10 @@ update msg model =
         , Cmd.none
         )
 
-    ChoseRackDiscard i ->
+    ChoseRackExchange i ->
       let
         newRack =
-          Rack.chooseToDiscard i model.rack
+          Rack.chooseToExchange i model.rack
       in
         ( { model | rack = newRack }
         , Cmd.none
@@ -201,6 +202,11 @@ update msg model =
         , Cmd.none
         )
 
+    ExchangeTiles ->
+      ( model
+      , Cmd.none
+      )
+
     PassTurn ->
       ( model
       , Cmd.none
@@ -219,18 +225,21 @@ subscriptions model =
 
 -- View
 
-viewTurn : Maybe Int -> Html Msg
-viewTurn turnScore =
+viewTurn : Model -> Html Msg
+viewTurn { rack, turnScore } =
   let
     (attr, html) =
-      case turnScore of
-        Nothing ->
-          ([], [ Html.text "Finish your move..." ])
-        Just score ->
-          if score > 0 then
-            ([ onClick EndTurn ], [ Html.text "End turn." ])
-          else
-            ([ onClick PassTurn ], [ Html.text "Pass turn." ])
+      if Rack.exchange rack then
+        ([ onClick ExchangeTiles ], [ Html.text "Exchnage Tiles." ])
+      else
+        case turnScore of
+          Nothing ->
+            ([], [ Html.text "Finish your move..." ])
+          Just score ->
+            if score > 0 then
+              ([ onClick EndTurn ], [ Html.text "End turn." ])
+            else
+              ([ onClick PassTurn ], [ Html.text "Pass turn." ])
   in
     Html.button attr html
 
@@ -247,9 +256,9 @@ view model =
           [ Html.div
             [ class "centered" ]
             [ Board.view ClickedBoard model.held model.board
-            , Rack.view { placeEv = ChoseRackPlace, discardEv = ChoseRackDiscard } model.rack
+            , Rack.view { placeEv = ChoseRackPlace, exchangeEv = ChoseRackExchange } model.rack
             , Html.button [ Html.Events.onClick (GotBag model.bag) ] [ Html.text "init rack" ]
-            , viewTurn model.turnScore
+            , viewTurn model
             ]
           , viewScore model.totalScore
           ]

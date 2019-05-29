@@ -1,9 +1,9 @@
 module Rack exposing
   ( Rack, size
   , empty, init
-  , take, chooseToDiscard
+  , take, chooseToExchange
   , return, replenish
-  , discarding, view
+  , exchanging, view
   )
 
 import Array exposing (Array)
@@ -19,7 +19,7 @@ type alias Event msg
 
 type alias Events msg
   = { placeEv : Event msg
-    , discardEv : Event msg
+    , exchangeEv : Event msg
     }
 
 type alias Chosen
@@ -31,7 +31,7 @@ type Cell
 
 type Mode
   = Place
-  | Discard
+  | Exchange
 
 type Rack
   = R Mode (Array Cell)
@@ -39,11 +39,13 @@ type Rack
 size : Int
 size = 7
 
-discarding : Rack -> Bool
-discarding (R mode _) =
+exchanging : Rack -> Bool
+exchanging (R mode _) =
   case mode of
-    Discard -> True
-    Place   -> False
+    Exchange ->
+      True
+    Place ->
+      False
 
 isChosen : Cell -> Bool
 isChosen cell =
@@ -99,8 +101,8 @@ return index (R mode cells) =
         False ->
           R mode cells
 
-chooseToDiscard : Int -> Rack -> Rack
-chooseToDiscard index (R mode cells) =
+chooseToExchange : Int -> Rack -> Rack
+chooseToExchange index (R mode cells) =
   case Array.get index cells of
     Nothing    ->
       R mode cells
@@ -112,7 +114,7 @@ chooseToDiscard index (R mode cells) =
           Array.set index (Occupied (not chosen) tile) cells
         newMode =
           if anyChosen newCells then
-            Discard
+            Exchange
           else
             Place
       in
@@ -137,6 +139,10 @@ replenish bag (R _ cells) =
     (Array.empty, bag) cells
   |> Tuple.mapFirst (R Place)
 
+exchange : List Tile -> Rack -> (Rack, List Tile)
+exchange bag (R _ cells) =
+
+
 viewCell : List (Html.Attribute msg) -> Cell -> Html msg
 viewCell handlers cell =
   let
@@ -159,7 +165,7 @@ viewCell handlers cell =
       html
 
 view : Events msg -> Rack -> Html msg
-view { placeEv, discardEv } (R mode cells) =
+view { placeEv, exchangeEv } (R mode cells) =
   let
     handlers i =
       case mode of
@@ -168,17 +174,17 @@ view { placeEv, discardEv } (R mode cells) =
             [ onClick (placeEv i) ]
           else
             [ onClick (placeEv i)
-            , onRightClick (discardEv i)
+            , onRightClick (exchangeEv i)
             ]
-        Discard ->
-          [ onRightClick (discardEv i) ]
+        Exchange ->
+          [ onRightClick (exchangeEv i) ]
 
     modeStr =
       case mode of
         Place ->
           "place"
-        Discard ->
-          "discard"
+        Exchange ->
+          "exchange"
   in
     Html.div
     [ class "rack", class modeStr ]
