@@ -65,7 +65,8 @@ init () = ( { dict = empty
 type Msg
   = GotText (Result Http.Error String)
   | GotBag (List Tile)
-  | ClickedRack Int
+  | ChoseRackPlace Int
+  | ChoseRackDiscard Int
   | ClickedBoard Int Int
   | PassTurn
   | EndTurn
@@ -97,7 +98,7 @@ update msg model =
         , Cmd.none
         )
 
-    ClickedRack i ->
+    ChoseRackPlace i ->
       let
         (taken, newRack) =
           case model.held of
@@ -112,13 +113,22 @@ update msg model =
                 model.rack
                 |> Rack.return j
                 |> Rack.take i
-        in
-      ( { model
-          | held = taken
-          , rack = newRack
-        }
-      , Cmd.none
-      )
+      in
+        ( { model
+            | held = taken
+            , rack = newRack
+          }
+        , Cmd.none
+        )
+
+    ChoseRackDiscard i ->
+      let
+        newRack =
+          Rack.chooseToDiscard i model.rack
+      in
+        ( { model | rack = newRack }
+        , Cmd.none
+        )
 
     ClickedBoard i j ->
       let
@@ -237,7 +247,7 @@ view model =
           [ Html.div
             [ class "centered" ]
             [ Board.view ClickedBoard model.held model.board
-            , Rack.view ClickedRack model.rack
+            , Rack.view { placeEv = ChoseRackPlace, discardEv = ChoseRackDiscard } model.rack
             , Html.button [ Html.Events.onClick (GotBag model.bag) ] [ Html.text "init rack" ]
             , viewTurn model.turnScore
             ]

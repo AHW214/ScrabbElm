@@ -40,8 +40,12 @@ body {
   height: 100%;
 }
 
-.chosen > .tile, .pending > .tile {
+.rack.place > .chosen > .tile, .pending > .tile {
   opacity: 0.5;
+}
+
+.rack.discard > .chosen > .tile {
+  background-color: #FF0000;
 }
 
 .tile > .letter {

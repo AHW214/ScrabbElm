@@ -1,11 +1,26 @@
-module Rack exposing (Rack, size, empty, init, take, return, replenish, view)
+module Rack exposing
+  ( Rack, size
+  , empty, init
+  , take, chooseToDiscard
+  , return, replenish
+  , discarding, view
+  )
 
 import Array exposing (Array)
 import Html exposing (Html)
-import Html.Events exposing (onClick)
+import Html.Events exposing (onClick, preventDefaultOn)
 import Html.Attributes exposing (class)
+import Json.Decode as Decode
 
 import Tile exposing (Tile)
+
+type alias Event msg
+  = Int -> msg
+
+type alias Events msg
+  = { placeEv : Event msg
+    , discardEv : Event msg
+    }
 
 type alias Chosen
   = Bool
@@ -14,14 +29,32 @@ type Cell
   = Empty
   | Occupied Chosen Tile
 
-type Rack =
-  R (Array Cell)
+type Mode
+  = Place
+  | Discard
+
+type Rack
+  = R Mode (Array Cell)
 
 size : Int
 size = 7
 
+discarding : Rack -> Bool
+discarding (R mode _) =
+  case mode of
+    Discard -> True
+    Place   -> False
+
+isChosen : Cell -> Bool
+isChosen cell =
+  case cell of
+    Empty ->
+      False
+    Occupied chosen _ ->
+      chosen
+
 empty : Rack
-empty = R (Array.repeat size Empty)
+empty = R Place (Array.repeat size Empty)
 
 -- assumes bag has over seven tiles
 init : List Tile -> (Rack, List Tile)
@@ -30,36 +63,57 @@ init bag =
     |> List.take size
     |> List.map (Occupied False)
     |> Array.fromList
-    |> R
+    |> R Place
   , List.drop size bag
   )
 
 take : Int -> Rack -> (Maybe (Int, Tile), Rack)
-take index (R cells) =
+take index (R mode cells) =
   case Array.get index cells of
-    Nothing    -> (Nothing, R cells)
-    Just Empty -> (Nothing, R cells)
+    Nothing    -> (Nothing, R mode cells)
+    Just Empty -> (Nothing, R mode cells)
     Just (Occupied chosen tile) ->
       case chosen of
         True ->
-          (Nothing, R cells)
+          (Nothing, R mode cells)
         False ->
-          (Just (index, tile), R (Array.set index (Occupied True tile) cells))
+          (Just (index, tile), R mode (Array.set index (Occupied True tile) cells))
 
 return : Int -> Rack -> Rack
-return index (R cells) =
+return index (R mode cells) =
   case Array.get index cells of
-    Nothing    -> R cells
-    Just Empty -> R cells
+    Nothing    -> R mode cells
+    Just Empty -> R mode cells
     Just (Occupied chosen tile) ->
       case chosen of
         True ->
-          R (Array.set index (Occupied False tile) cells)
+          R mode (Array.set index (Occupied False tile) cells)
         False ->
-          R cells
+          R mode cells
+
+chooseToDiscard : Int -> Rack -> Rack
+chooseToDiscard index (R mode cells) =
+  case Array.get index cells of
+    Nothing    ->
+      R mode cells
+    Just Empty ->
+      R mode cells
+    Just (Occupied chosen tile) ->
+      let
+        newCells =
+          Array.set index (Occupied (not chosen) tile) cells
+        arrayAny f =
+          Array.foldl ((||) << f) False
+        newMode =
+          if arrayAny isChosen newCells then
+            Discard
+          else
+            Place
+      in
+        R newMode newCells
 
 replenish : List Tile -> Rack -> (Rack, List Tile)
-replenish bag (R cells) =
+replenish bag (R _ cells) =
   Array.foldl
     (\cell (newCells, newBag) ->
       case cell of
@@ -75,10 +129,10 @@ replenish bag (R cells) =
               (Array.push (Occupied False newTile) newCells, List.drop 1 newBag)
     )
     (Array.empty, bag) cells
-  |> Tuple.mapFirst R
+  |> Tuple.mapFirst (R Place)
 
-viewCell : msg -> Cell -> Html msg
-viewCell event cell =
+viewCell : List (Html.Attribute msg) -> Cell -> Html msg
+viewCell handlers cell =
   let
     (attr, html) =
       case cell of
@@ -88,18 +142,41 @@ viewCell event cell =
           )
         Occupied chosen tile ->
           ( if chosen then
-              [ onClick event, class "chosen" ]
+              [ class "chosen" ]
             else
-              [ onClick event ]
+              []
           , [ Tile.view tile ]
           )
   in
-    Html.div attr html
+    Html.div
+      (attr ++ handlers)
+      html
 
-view : (Int -> msg) -> Rack -> Html msg
-view event (R cells) =
-  Html.div
-  [ class "rack" ]
-  (cells
-    |> Array.indexedMap (\i -> viewCell (event i))
-    |> Array.toList)
+view : Events msg -> Rack -> Html msg
+view { placeEv, discardEv } (R mode cells) =
+  let
+    handlers i =
+      [ onClick (placeEv i)
+      , onRightClick (discardEv i)
+      ]
+
+    modeStr =
+      case mode of
+        Place ->
+          "place"
+        Discard ->
+          "discard"
+  in
+    Html.div
+    [ class "rack", class modeStr ]
+    (cells
+      |> Array.indexedMap (viewCell << handlers)
+      |> Array.toList)
+
+onRightClick : msg -> Html.Attribute msg
+onRightClick event =
+  preventDefaultOn "contextmenu" (Decode.map alwaysPreventDefault (Decode.succeed event))
+
+alwaysPreventDefault : msg -> (msg, Bool)
+alwaysPreventDefault msg =
+  (msg, True)
