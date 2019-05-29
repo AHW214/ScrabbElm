@@ -70,7 +70,8 @@ type Msg
   | ChoseRackPlace Int
   | ChoseRackExchange Int
   | ClickedBoard Int Int
-  | ExchangeTiles
+  | EndExchange (Maybe (List Tile, List Tile))
+  | StartExchange
   | PassTurn
   | EndTurn
 
@@ -204,10 +205,31 @@ update msg model =
         , Cmd.none
         )
 
-    ExchangeTiles ->
-      ( model
-      , Cmd.none
-      )
+    StartExchange ->
+      let
+        tiles =
+          Rack.tilesToExchange model.rack
+      in
+        ( model
+        , Random.generate
+            EndExchange (exchangeTiles tiles model.bag)
+        )
+
+    EndExchange result ->
+      let
+        newModel =
+          case result of
+            Nothing ->
+              model
+            Just (exTiles, exBag) ->
+              { model
+                  | rack = Rack.exchange exTiles model.rack
+                  , bag = exBag
+              }
+      in
+        ( newModel
+        , Cmd.none
+        )
 
     PassTurn ->
       ( model
@@ -218,9 +240,35 @@ update msg model =
 loadDictionary : String -> Tree String
 loadDictionary = RedBlackTree.fromList << String.words
 
-exchangeTiles : List Tile -> List Tile -> Generator (List Tile, List Tile)
+exchangeTiles : List Tile -> List Tile -> Generator (Maybe (List Tile, List Tile))
 exchangeTiles discarded bag =
-  Debug.todo "TODO"
+  chooseRandomTiles (List.length discarded) ([], bag)
+    |> Random.andThen
+      (\result ->
+        case result of
+          Nothing ->
+            Random.constant Nothing
+          Just (chosen, newBag) ->
+            Random.map2
+              (\x y -> Just (x, y))
+              (Random.constant chosen)
+              (Random.List.shuffle (discarded ++ newBag))
+      )
+
+chooseRandomTiles : Int -> (List Tile, List Tile) -> Generator (Maybe (List Tile, List Tile))
+chooseRandomTiles i (chosen, bag) =
+  if i <= 0 then
+    Random.constant (Just (chosen, bag))
+  else
+    Random.List.choose bag
+      |> Random.andThen
+        (\(maybeTile, newBag) ->
+          case maybeTile of
+            Nothing ->
+              Random.constant Nothing
+            Just tile ->
+              Random.lazy (\_ -> chooseRandomTiles (i - 1) (tile :: chosen, newBag))
+        )
 
 
 -- Subscriptions
@@ -233,11 +281,14 @@ subscriptions model =
 -- View
 
 viewTurn : Model -> Html Msg
-viewTurn { rack, turnScore } =
+viewTurn { rack, bag, turnScore } =
   let
     (attr, html) =
       if Rack.exchanging rack then
-        ([ onClick ExchangeTiles ], [ Html.text "Exchange Tiles." ])
+        if List.length bag < Rack.size then
+          ([], [ Html.text "Not enough tiles..." ])
+        else
+          ([ onClick StartExchange ], [ Html.text "Exchange Tiles." ])
       else
         case turnScore of
           Nothing ->

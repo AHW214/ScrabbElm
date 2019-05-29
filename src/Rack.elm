@@ -3,7 +3,9 @@ module Rack exposing
   , empty, init
   , take, chooseToExchange
   , return, replenish
-  , exchanging, view
+  , exchange, exchanging
+  , tilesToExchange
+  , view
   )
 
 import Array exposing (Array)
@@ -74,6 +76,22 @@ anyChosen cells =
   in
     anyArray isChosen cells
 
+isEmpty : Cell -> Bool
+isEmpty cell =
+  case cell of
+    Empty ->
+      True
+    _ ->
+      False
+
+allEmpty : Rack -> Bool
+allEmpty (R _ cells) =
+  let
+    allArray f =
+      Array.foldl ((&&) << f) True
+  in
+    allArray isEmpty cells
+
 empty : Rack
 empty = R Place (Array.repeat size Empty)
 
@@ -136,24 +154,40 @@ replenish bag (R _ cells) =
   Array.foldl
     (\cell (newCells, newBag) ->
       case cell of
-        Empty ->
-          (Array.push cell newCells, newBag)
-        Occupied False tile ->
-          (Array.push cell newCells, newBag)
-        Occupied True tile ->
+        Occupied True _ ->
           case List.head newBag of
             Nothing ->
               (Array.push Empty newCells, newBag)
             Just newTile ->
               (Array.push (Occupied False newTile) newCells, List.drop 1 newBag)
+        _ ->
+          (Array.push cell newCells, newBag)
     )
     (Array.empty, bag) cells
   |> Tuple.mapFirst (R Place)
 
+exchange : List Tile -> Rack -> Rack
+exchange tiles (R _ cells) =
+  Array.foldl
+    (\cell (newCells, newTiles) ->
+      case (newTiles, cell) of
+        (tile::restTiles, Occupied True _) ->
+          (Array.push (Occupied False tile) newCells, restTiles)
+        _ ->
+          (Array.push cell newCells, newTiles)
+    )
+    (Array.empty, tiles) cells
+  |> Tuple.first
+  |> R Place
+
 tilesToExchange : Rack -> List Tile
-tilesToExchange (R _ cells) =
-  Array.toList cells
-    |> List.filterMap getChosenTile
+tilesToExchange (R mode cells) =
+  case mode of
+    Place ->
+      []
+    Exchange ->
+      Array.toList cells
+        |> List.filterMap getChosenTile
 
 
 viewCell : List (Html.Attribute msg) -> Cell -> Html msg
