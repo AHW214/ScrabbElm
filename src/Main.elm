@@ -230,7 +230,7 @@ viewTurn { rack, turnScore } =
   let
     (attr, html) =
       if Rack.exchange rack then
-        ([ onClick ExchangeTiles ], [ Html.text "Exchnage Tiles." ])
+        ([ onClick ExchangeTiles ], [ Html.text "Exchange Tiles." ])
       else
         case turnScore of
           Nothing ->
