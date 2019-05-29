@@ -53,6 +53,14 @@ isChosen cell =
     Occupied chosen _ ->
       chosen
 
+anyChosen : Array Cell -> Bool
+anyChosen cells =
+  let
+    anyArray f =
+      Array.foldl ((||) << f) False
+  in
+    anyArray isChosen cells
+
 empty : Rack
 empty = R Place (Array.repeat size Empty)
 
@@ -102,10 +110,8 @@ chooseToDiscard index (R mode cells) =
       let
         newCells =
           Array.set index (Occupied (not chosen) tile) cells
-        arrayAny f =
-          Array.foldl ((||) << f) False
         newMode =
-          if arrayAny isChosen newCells then
+          if anyChosen newCells then
             Discard
           else
             Place
@@ -156,9 +162,16 @@ view : Events msg -> Rack -> Html msg
 view { placeEv, discardEv } (R mode cells) =
   let
     handlers i =
-      [ onClick (placeEv i)
-      , onRightClick (discardEv i)
-      ]
+      case mode of
+        Place ->
+          if anyChosen cells then
+            [ onClick (placeEv i) ]
+          else
+            [ onClick (placeEv i)
+            , onRightClick (discardEv i)
+            ]
+        Discard ->
+          [ onRightClick (discardEv i) ]
 
     modeStr =
       case mode of
