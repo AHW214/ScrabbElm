@@ -47,6 +47,17 @@ exchanging (R mode _) =
     Place ->
       False
 
+getChosenTile : Cell -> Maybe Tile
+getChosenTile cell =
+  case cell of
+    Empty ->
+      Nothing
+    Occupied chosen tile ->
+      if chosen then
+        Just tile
+      else
+        Nothing
+
 isChosen : Cell -> Bool
 isChosen cell =
   case cell of
@@ -139,8 +150,10 @@ replenish bag (R _ cells) =
     (Array.empty, bag) cells
   |> Tuple.mapFirst (R Place)
 
-exchange : List Tile -> Rack -> (Rack, List Tile)
-exchange bag (R _ cells) =
+tilesToExchange : Rack -> List Tile
+tilesToExchange (R _ cells) =
+  Array.toList cells
+    |> List.filterMap getChosenTile
 
 
 viewCell : List (Html.Attribute msg) -> Cell -> Html msg

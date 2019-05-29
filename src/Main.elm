@@ -8,6 +8,8 @@ import Html exposing (Html)
 import Html.Events exposing (onClick)
 import Html.Attributes exposing (id, class)
 import Http
+import Random exposing (Generator)
+import Random.List
 
 import RedBlackTree exposing (Tree, empty, insert, member)
 import Board exposing (Board)
@@ -216,6 +218,11 @@ update msg model =
 loadDictionary : String -> Tree String
 loadDictionary = RedBlackTree.fromList << String.words
 
+exchangeTiles : List Tile -> List Tile -> Generator (List Tile, List Tile)
+exchangeTiles discarded bag =
+  Debug.todo "TODO"
+
+
 -- Subscriptions
 
 subscriptions : Model -> Sub Msg
@@ -229,7 +236,7 @@ viewTurn : Model -> Html Msg
 viewTurn { rack, turnScore } =
   let
     (attr, html) =
-      if Rack.exchange rack then
+      if Rack.exchanging rack then
         ([ onClick ExchangeTiles ], [ Html.text "Exchange Tiles." ])
       else
         case turnScore of
