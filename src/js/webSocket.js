@@ -53,6 +53,19 @@ function bind(app)
     }
 }
 
+function openHandler(toElm, socket, url, event)
+{
+  toElm.send({
+    msgType: "connected",
+    msg: {
+      url: url,
+      binaryType: socket.binaryType,
+      extensions: socket.extensions,
+      protocol: socket.protocol
+    }
+  });
+}
+
 function messageHandler(toElm, socket, url, event)
 {
   if (typeof event.data === "string")
