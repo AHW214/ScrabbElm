@@ -1,7 +1,7 @@
 module Multiplayer exposing
   ( Event(..), eventDecoder
-  , exchangeToString, placeToString
-  , passToString, endGameToString
+  , exchangeEncoder, placeEncoder
+  , passEncoder, endGameEncoder
   )
 
 import Json.Decode as Decode exposing (Decoder)
@@ -90,34 +90,33 @@ eventDecoder =
             Decode.fail "Unknown server event: "
       )
 
-eventToString : String -> Value -> String
-eventToString eventType data =
-  Encode.encode 0 <|
-    Encode.object
-      [ ( "eventType", Encode.string eventType )
-      , ( "data", data )
-      ]
+eventEncoder : String -> Value -> Value
+eventEncoder eventType data =
+  Encode.object
+    [ ( "eventType", Encode.string eventType )
+    , ( "data", data )
+    ]
 
-exchangeToString : Bag -> String
-exchangeToString bag =
-  eventToString "exchanged"
+exchangeEncoder : Bag -> Value
+exchangeEncoder bag =
+  eventEncoder "exchanged"
     (Encode.object
       [ ( "bag", bagEncoder bag ) ]
     )
 
-placeToString : Bag -> Placed -> String
-placeToString bag placed =
-  eventToString "placed"
+placeEncoder : Bag -> Placed -> Value
+placeEncoder bag placed =
+  eventEncoder "placed"
     (Encode.object
       [ ( "bag", bagEncoder bag )
       , ( "placed", placedEncoder placed )
       ]
     )
 
-passToString : String
-passToString =
-  eventToString "pass" Encode.null
+passEncoder : Value
+passEncoder =
+  eventEncoder "pass" Encode.null
 
-endGameToString : String
-endGameToString =
-  eventToString "endGame" Encode.null
+endGameEncoder : Value
+endGameEncoder =
+  eventEncoder "endGame" Encode.null

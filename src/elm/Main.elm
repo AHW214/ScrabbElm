@@ -256,14 +256,14 @@ update msg model =
         newScore =
           model.totalScore + turnScore
 
-        (newState, stringOut) =
+        (newState, valueOut) =
           if Rack.allEmpty newRack then
             ( GameOver
-            , Multiplayer.endGameToString
+            , Multiplayer.endGameEncoder
             )
           else
             ( GameActive
-            , Multiplayer.placeToString newBag placed
+            , Multiplayer.placeEncoder newBag placed
             )
 
         boardE =
@@ -285,9 +285,9 @@ update msg model =
             , totalScore = Debug.log "TOTAL SCORE" newScore
             , boardEmpty = boardE
           }
-        , WebSocket.sendString
+        , WebSocket.sendJson
             (getConnectionInfo model.socketInfo)
-            (stringOut)
+            (valueOut)
         )
 
     StartExchange ->
@@ -313,16 +313,16 @@ update msg model =
               }
       in
         ( newModel
-        , WebSocket.sendString
+        , WebSocket.sendJson
             (getConnectionInfo model.socketInfo)
-            (Multiplayer.exchangeToString newModel.bag)
+            (Multiplayer.exchangeEncoder newModel.bag)
         )
 
     PassTurn ->
       ( model
-      , WebSocket.sendString
+      , WebSocket.sendJson
           (getConnectionInfo model.socketInfo)
-          (Multiplayer.passToString)
+          (Multiplayer.passEncoder)
       )
 
 
