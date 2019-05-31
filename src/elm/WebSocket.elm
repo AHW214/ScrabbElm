@@ -1,6 +1,6 @@
 -- Based on https://github.com/MattCheely/elm-port-examples/blob/master/websocket
 
-port module WebSocket exposing (..)
+port module WebSocket exposing (ConnectionInfo, Event(..), connect, sendString, events)
 
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
