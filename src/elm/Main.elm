@@ -10,9 +10,12 @@ import Html.Attributes exposing (id, class)
 import Http
 import Random exposing (Generator)
 import Random.List
+import Json.Decode as Decode
+import Json.Encode as Encode
 
 import RedBlackTree exposing (Tree, empty, insert, member)
 import WebSocket exposing (ConnectionInfo)
+import Multiplayer exposing (eventDecoder)
 import Board exposing (Board)
 import Rack exposing (Rack)
 import Tile exposing (Tile)
@@ -103,8 +106,45 @@ update msg model =
       , Cmd.none
       )
 
-    ReceivedString message ->
-      Debug.todo "TODO"
+    ReceivedString eventObject ->
+      let
+        newModel =
+          case Decode.decodeString Multiplayer.eventDecoder eventObject of
+            Err errMsg ->
+              let
+                _ = Debug.log "Multiplayer Error" errMsg
+              in
+                model
+
+            Ok event ->
+              case event of
+                Multiplayer.StartGame bag ->
+                  let
+                    (newRack, newBag) = Rack.init bag
+                  in
+                    { model
+                      | rack = newRack
+                      , bag = newBag
+                    }
+
+                Multiplayer.Exchanged newBag ->
+                  { model | bag = newBag }
+
+                Multiplayer.Placed newBag placed ->
+                  { model
+                    | bag = newBag
+                    , board = Board.placeAtIndices placed model.board
+                  }
+
+                Multiplayer.Passed ->
+                  model
+
+                Multiplayer.EndGame ->
+                  model
+      in
+        ( newModel
+        , Cmd.none
+        )
 
     Error errMsg ->
       let
@@ -129,7 +169,7 @@ update msg model =
 
     GotBag bag ->
       let
-        (newRack, newBag) = Rack.init model.bag
+        (newRack, newBag) = Rack.init bag
       in
         ( { model
             | rack = newRack
@@ -212,7 +252,7 @@ update msg model =
           case model.turnScore of
             Nothing -> 0
             Just score ->
-              if placed == Rack.size then
+              if List.length placed == Rack.size then
                 score + 50
               else
                 score
@@ -238,7 +278,9 @@ update msg model =
             , totalScore = Debug.log "TOTAL SCORE" newScore
             , boardEmpty = boardE
           }
-        , Cmd.none
+        , WebSocket.sendString
+            (getConnectionInfo model.socketInfo)
+            (Multiplayer.placeToString newBag placed)
         )
 
     StartExchange ->
@@ -248,7 +290,7 @@ update msg model =
       in
         ( model
         , Random.generate
-            EndExchange (exchangeTiles tiles model.bag)
+            EndExchange (Tile.exchange tiles model.bag)
         )
 
     EndExchange result ->
@@ -264,47 +306,29 @@ update msg model =
               }
       in
         ( newModel
-        , Cmd.none
+        , WebSocket.sendString
+            (getConnectionInfo model.socketInfo)
+            (Multiplayer.exchangeToString newModel.bag)
         )
 
     PassTurn ->
       ( model
-      , Cmd.none
+      , WebSocket.sendString
+          (getConnectionInfo model.socketInfo)
+          (Multiplayer.passToString)
       )
 
 
 loadDictionary : String -> Tree String
 loadDictionary = RedBlackTree.fromList << String.words
 
-exchangeTiles : List Tile -> List Tile -> Generator (Maybe (List Tile, List Tile))
-exchangeTiles discarded bag =
-  chooseRandomTiles (List.length discarded) ([], bag)
-    |> Random.andThen
-      (\result ->
-        case result of
-          Nothing ->
-            Random.constant Nothing
-          Just (chosen, newBag) ->
-            Random.map2
-              (\x y -> Just (x, y))
-              (Random.constant chosen)
-              (Random.List.shuffle (discarded ++ newBag))
-      )
-
-chooseRandomTiles : Int -> (List Tile, List Tile) -> Generator (Maybe (List Tile, List Tile))
-chooseRandomTiles i (chosen, bag) =
-  if i <= 0 then
-    Random.constant (Just (chosen, bag))
-  else
-    Random.List.choose bag
-      |> Random.andThen
-        (\(maybeTile, newBag) ->
-          case maybeTile of
-            Nothing ->
-              Random.constant Nothing
-            Just tile ->
-              Random.lazy (\_ -> chooseRandomTiles (i - 1) (tile :: chosen, newBag))
-        )
+getConnectionInfo : SocketStatus -> ConnectionInfo
+getConnectionInfo socketInfo =
+  case socketInfo of
+    Connected info ->
+      info
+    _ ->
+      Debug.todo "Not connected to server."
 
 
 -- Subscriptions
