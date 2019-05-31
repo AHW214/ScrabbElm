@@ -42,8 +42,14 @@ type SocketStatus
   | Connected ConnectionInfo
   | Closed Int
 
+type State
+  = Lobby
+  | GameActive
+  | GameOver
+
 type alias Model =
   { socketInfo: SocketStatus
+  , state : State
   , dict : Tree String
   , board : Board
   , rack : Rack
@@ -56,6 +62,7 @@ type alias Model =
 
 init : Flags -> ( Model, Cmd Msg )
 init () = ( { socketInfo = Unopened
+            , state = Lobby
             , dict = empty
             , board = Board.init
             , rack = Rack.empty
@@ -84,7 +91,6 @@ type Msg
   | ReceivedString String
   | Error String
   | GotText (Result Http.Error String)
-  | GotBag (List Tile)
   | ChoseRackPlace Int
   | ChoseRackExchange Int
   | ClickedBoard Int Int
@@ -123,7 +129,8 @@ update msg model =
                     (newRack, newBag) = Rack.init bag
                   in
                     { model
-                      | rack = newRack
+                      | state = GameActive
+                      , rack = newRack
                       , bag = newBag
                     }
 
@@ -140,7 +147,7 @@ update msg model =
                   model
 
                 Multiplayer.EndGame ->
-                  model
+                  { model | state = GameOver }
       in
         ( newModel
         , Cmd.none
@@ -164,17 +171,6 @@ update msg model =
               model
       in
         ( newModel
-        , Cmd.none
-        )
-
-    GotBag bag ->
-      let
-        (newRack, newBag) = Rack.init bag
-      in
-        ( { model
-            | rack = newRack
-            , bag = newBag
-          }
         , Cmd.none
         )
 
@@ -260,6 +256,16 @@ update msg model =
         newScore =
           model.totalScore + turnScore
 
+        (newState, stringOut) =
+          if Rack.allEmpty newRack then
+            ( GameOver
+            , Multiplayer.endGameToString
+            )
+          else
+            ( GameActive
+            , Multiplayer.placeToString newBag placed
+            )
+
         boardE =
           if model.boardEmpty == False then
             False
@@ -271,7 +277,8 @@ update msg model =
                 model.boardEmpty
       in
         ( { model
-            | board = newBoard
+            | state = newState
+            , board = newBoard
             , rack = newRack
             , bag = newBag
             , turnScore = Just 0
@@ -280,7 +287,7 @@ update msg model =
           }
         , WebSocket.sendString
             (getConnectionInfo model.socketInfo)
-            (Multiplayer.placeToString newBag placed)
+            (stringOut)
         )
 
     StartExchange ->
@@ -382,20 +389,47 @@ viewScore : Int -> Html Msg
 viewScore s =
   Html.div [ id "score" ] [ Html.text (String.fromInt s) ]
 
+viewGame : Model -> Html Msg
+viewGame model =
+  Html.div
+    [ id "wrapper" ]
+    [ Html.div
+        [ class "centered" ]
+        [ Board.view ClickedBoard model.held model.board
+        , Rack.view { placeEv = ChoseRackPlace, exchangeEv = ChoseRackExchange } model.rack
+        , viewTurn model
+        ]
+    , viewScore model.totalScore
+    ]
+
+viewLobby : Model -> Html Msg
+viewLobby model =
+  Html.div
+    [ id "wrapper" ]
+    [ Html.div
+        [ class "centered" ]
+        [ Html.text "Lobby" ]
+    ]
+
+viewGameOver : Model -> Html Msg
+viewGameOver model =
+  Html.div
+    [ id "wrapper" ]
+    [ Html.div
+        [ class "centered" ]
+        [ Html.text "Game Over" ]
+    ]
+
 view : Model -> Browser.Document Msg
 view model =
   { title = "ScrabbElm"
   , body =
-      [ Html.div
-          [ id "wrapper" ]
-          [ Html.div
-            [ class "centered" ]
-            [ Board.view ClickedBoard model.held model.board
-            , Rack.view { placeEv = ChoseRackPlace, exchangeEv = ChoseRackExchange } model.rack
-            , Html.button [ Html.Events.onClick (GotBag model.bag) ] [ Html.text "init rack" ]
-            , viewTurn model
-            ]
-          , viewScore model.totalScore
-          ]
+      [ case model.state of
+        Lobby ->
+          viewLobby model
+        GameActive ->
+          viewGame model
+        GameOver ->
+          viewGameOver model
       ]
   }

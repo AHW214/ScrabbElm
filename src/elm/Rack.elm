@@ -4,7 +4,7 @@ module Rack exposing
   , take, chooseToExchange
   , return, replenish
   , exchange, exchanging
-  , tilesToExchange
+  , tilesToExchange, allEmpty
   , view
   )
 
