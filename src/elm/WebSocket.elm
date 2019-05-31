@@ -1,6 +1,6 @@
 -- Based on https://github.com/MattCheely/elm-port-examples/blob/master/websocket
 
-port module WebSocket exposing (ConnectionInfo, Event(..), connect, sendString, events)
+port module WebSocket exposing (ConnectionInfo, Event(..), connect, sendJson, events)
 
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
@@ -21,12 +21,12 @@ connect url protocols =
     )
     |> toSocket
 
-sendString : ConnectionInfo -> String -> Cmd msg
-sendString connection text =
+sendJson : ConnectionInfo -> Value -> Cmd msg
+sendJson connection value =
   message "sendString"
     (Encode.object
       [ ( "url", Encode.string connection.url )
-      , ( "message", Encode.string text )
+      , ( "message", value )
       ]
     )
     |> toSocket

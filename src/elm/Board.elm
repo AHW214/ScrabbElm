@@ -1,4 +1,10 @@
-module Board exposing (Board, init, set, getTileAt, placePending, view, pendingTilesWordCheck, pendingTilesCheckFirstTurn)
+module Board exposing
+  ( Board, init, set
+  , getTileAt, placePending
+  , placeAtIndices, view
+  , pendingTilesWordCheck
+  , pendingTilesCheckFirstTurn
+  )
 
 import Dict exposing (Dict)
 import Html exposing (Html, Attribute)
@@ -129,8 +135,7 @@ set i j held (B pending matrix) =
           )
         _ -> (B pending matrix, Nothing)
 
-
-placePending : Board -> (Board, Int)
+placePending : Board -> (Board, List (Index, Tile))
 placePending (B pending matrix) =
   let
     placer =
@@ -139,15 +144,31 @@ placePending (B pending matrix) =
           case Matrix.get i j m of
             Nothing ->
               (m, p)
-            Just cell ->
-              ( Matrix.set i j (place cell) m
-              , p + 1
-              )
+            Just (C kind state) ->
+              let
+                t =
+                  case getTile state of
+                    Just tile ->
+                      tile
+                    Nothing ->
+                      Debug.todo "placePending: Impossible"
+              in
+                ( Matrix.set i j (place (C kind state)) m
+                , ((i, j), t) :: p
+                )
         )
   in
     pending
-      |> placer (matrix, 0)
+      |> placer (matrix, [])
       |> Tuple.mapFirst (B Dict.empty)
+
+placeAtIndices : List (Index, Tile) -> Board -> Board
+placeAtIndices pairs (B pending matrix) =
+  let
+    placer =
+      List.foldl (\((i, j), tile) m -> Matrix.set i j (C Normal (Placed tile)) m)
+  in
+    B pending (placer matrix pairs)
 
 getTileAt : Int -> Int -> Board -> Maybe Tile
 getTileAt i j (B _ mat) =

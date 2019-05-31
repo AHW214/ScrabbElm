@@ -10,9 +10,12 @@ import Html.Attributes exposing (id, class)
 import Http
 import Random exposing (Generator)
 import Random.List
+import Json.Decode as Decode
+import Json.Encode as Encode
 
 import RedBlackTree exposing (Tree, empty, insert, member)
 import WebSocket exposing (ConnectionInfo)
+import Multiplayer exposing (eventDecoder)
 import Board exposing (Board)
 import Rack exposing (Rack)
 import Tile exposing (Tile)
@@ -39,8 +42,14 @@ type SocketStatus
   | Connected ConnectionInfo
   | Closed Int
 
+type State
+  = Lobby
+  | GameActive
+  | GameOver
+
 type alias Model =
   { socketInfo: SocketStatus
+  , state : State
   , dict : Tree String
   , board : Board
   , rack : Rack
@@ -53,6 +62,7 @@ type alias Model =
 
 init : Flags -> ( Model, Cmd Msg )
 init () = ( { socketInfo = Unopened
+            , state = Lobby
             , dict = empty
             , board = Board.init
             , rack = Rack.empty
@@ -81,7 +91,6 @@ type Msg
   | ReceivedString String
   | Error String
   | GotText (Result Http.Error String)
-  | GotBag (List Tile)
   | ChoseRackPlace Int
   | ChoseRackExchange Int
   | ClickedBoard Int Int
@@ -103,8 +112,46 @@ update msg model =
       , Cmd.none
       )
 
-    ReceivedString message ->
-      Debug.todo "TODO"
+    ReceivedString eventObject ->
+      let
+        newModel =
+          case Decode.decodeString Multiplayer.eventDecoder eventObject of
+            Err errMsg ->
+              let
+                _ = Debug.log "Multiplayer Error" errMsg
+              in
+                model
+
+            Ok event ->
+              case event of
+                Multiplayer.StartGame bag ->
+                  let
+                    (newRack, newBag) = Rack.init bag
+                  in
+                    { model
+                      | state = GameActive
+                      , rack = newRack
+                      , bag = newBag
+                    }
+
+                Multiplayer.Exchanged newBag ->
+                  { model | bag = newBag }
+
+                Multiplayer.Placed newBag placed ->
+                  { model
+                    | bag = newBag
+                    , board = Board.placeAtIndices placed model.board
+                  }
+
+                Multiplayer.Passed ->
+                  model
+
+                Multiplayer.EndGame ->
+                  { model | state = GameOver }
+      in
+        ( newModel
+        , Cmd.none
+        )
 
     Error errMsg ->
       let
@@ -124,17 +171,6 @@ update msg model =
               model
       in
         ( newModel
-        , Cmd.none
-        )
-
-    GotBag bag ->
-      let
-        (newRack, newBag) = Rack.init model.bag
-      in
-        ( { model
-            | rack = newRack
-            , bag = newBag
-          }
         , Cmd.none
         )
 
@@ -212,13 +248,23 @@ update msg model =
           case model.turnScore of
             Nothing -> 0
             Just score ->
-              if placed == Rack.size then
+              if List.length placed == Rack.size then
                 score + 50
               else
                 score
 
         newScore =
           model.totalScore + turnScore
+
+        (newState, valueOut) =
+          if Rack.allEmpty newRack then
+            ( GameOver
+            , Multiplayer.endGameEncoder
+            )
+          else
+            ( GameActive
+            , Multiplayer.placeEncoder newBag placed
+            )
 
         boardE =
           if model.boardEmpty == False then
@@ -231,14 +277,17 @@ update msg model =
                 model.boardEmpty
       in
         ( { model
-            | board = newBoard
+            | state = newState
+            , board = newBoard
             , rack = newRack
             , bag = newBag
             , turnScore = Just 0
             , totalScore = Debug.log "TOTAL SCORE" newScore
             , boardEmpty = boardE
           }
-        , Cmd.none
+        , WebSocket.sendJson
+            (getConnectionInfo model.socketInfo)
+            (valueOut)
         )
 
     StartExchange ->
@@ -248,7 +297,7 @@ update msg model =
       in
         ( model
         , Random.generate
-            EndExchange (exchangeTiles tiles model.bag)
+            EndExchange (Tile.exchange tiles model.bag)
         )
 
     EndExchange result ->
@@ -264,47 +313,29 @@ update msg model =
               }
       in
         ( newModel
-        , Cmd.none
+        , WebSocket.sendJson
+            (getConnectionInfo model.socketInfo)
+            (Multiplayer.exchangeEncoder newModel.bag)
         )
 
     PassTurn ->
       ( model
-      , Cmd.none
+      , WebSocket.sendJson
+          (getConnectionInfo model.socketInfo)
+          (Multiplayer.passEncoder)
       )
 
 
 loadDictionary : String -> Tree String
 loadDictionary = RedBlackTree.fromList << String.words
 
-exchangeTiles : List Tile -> List Tile -> Generator (Maybe (List Tile, List Tile))
-exchangeTiles discarded bag =
-  chooseRandomTiles (List.length discarded) ([], bag)
-    |> Random.andThen
-      (\result ->
-        case result of
-          Nothing ->
-            Random.constant Nothing
-          Just (chosen, newBag) ->
-            Random.map2
-              (\x y -> Just (x, y))
-              (Random.constant chosen)
-              (Random.List.shuffle (discarded ++ newBag))
-      )
-
-chooseRandomTiles : Int -> (List Tile, List Tile) -> Generator (Maybe (List Tile, List Tile))
-chooseRandomTiles i (chosen, bag) =
-  if i <= 0 then
-    Random.constant (Just (chosen, bag))
-  else
-    Random.List.choose bag
-      |> Random.andThen
-        (\(maybeTile, newBag) ->
-          case maybeTile of
-            Nothing ->
-              Random.constant Nothing
-            Just tile ->
-              Random.lazy (\_ -> chooseRandomTiles (i - 1) (tile :: chosen, newBag))
-        )
+getConnectionInfo : SocketStatus -> ConnectionInfo
+getConnectionInfo socketInfo =
+  case socketInfo of
+    Connected info ->
+      info
+    _ ->
+      Debug.todo "Not connected to server."
 
 
 -- Subscriptions
@@ -358,20 +389,47 @@ viewScore : Int -> Html Msg
 viewScore s =
   Html.div [ id "score" ] [ Html.text (String.fromInt s) ]
 
+viewGame : Model -> Html Msg
+viewGame model =
+  Html.div
+    [ id "wrapper" ]
+    [ Html.div
+        [ class "centered" ]
+        [ Board.view ClickedBoard model.held model.board
+        , Rack.view { placeEv = ChoseRackPlace, exchangeEv = ChoseRackExchange } model.rack
+        , viewTurn model
+        ]
+    , viewScore model.totalScore
+    ]
+
+viewLobby : Model -> Html Msg
+viewLobby model =
+  Html.div
+    [ id "wrapper" ]
+    [ Html.div
+        [ class "centered" ]
+        [ Html.text "Lobby" ]
+    ]
+
+viewGameOver : Model -> Html Msg
+viewGameOver model =
+  Html.div
+    [ id "wrapper" ]
+    [ Html.div
+        [ class "centered" ]
+        [ Html.text "Game Over" ]
+    ]
+
 view : Model -> Browser.Document Msg
 view model =
   { title = "ScrabbElm"
   , body =
-      [ Html.div
-          [ id "wrapper" ]
-          [ Html.div
-            [ class "centered" ]
-            [ Board.view ClickedBoard model.held model.board
-            , Rack.view { placeEv = ChoseRackPlace, exchangeEv = ChoseRackExchange } model.rack
-            , Html.button [ Html.Events.onClick (GotBag model.bag) ] [ Html.text "init rack" ]
-            , viewTurn model
-            ]
-          , viewScore model.totalScore
-          ]
+      [ case model.state of
+        Lobby ->
+          viewLobby model
+        GameActive ->
+          viewGame model
+        GameOver ->
+          viewGameOver model
       ]
   }
