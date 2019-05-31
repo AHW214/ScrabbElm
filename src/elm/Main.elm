@@ -12,6 +12,7 @@ import Random exposing (Generator)
 import Random.List
 
 import RedBlackTree exposing (Tree, empty, insert, member)
+import WebSocket exposing (ConnectionInfo)
 import Board exposing (Board)
 import Rack exposing (Rack)
 import Tile exposing (Tile)
@@ -33,8 +34,14 @@ main =
 
 -- Model
 
+type SocketStatus
+  = Unopened
+  | Connected ConnectionInfo
+  | Closed Int
+
 type alias Model =
-  { dict : Tree String
+  { socketInfo: SocketStatus
+  , dict : Tree String
   , board : Board
   , rack : Rack
   , bag : List Tile
@@ -45,7 +52,8 @@ type alias Model =
   }
 
 init : Flags -> ( Model, Cmd Msg )
-init () = ( { dict = empty
+init () = ( { socketInfo = Unopened
+            , dict = empty
             , board = Board.init
             , rack = Rack.empty
             , bag = List.map Tile.letter (String.toList "historyhornfarmpastemobbitamsndlnfdsl")
@@ -55,17 +63,24 @@ init () = ( { dict = empty
             , totalScore = 0
             , boardEmpty = True
             }
-          , Http.get
-            { url = "https://raw.githubusercontent.com/AHW214/ScrabbElm/master/assets/dictionary.txt"
-            , expect = Http.expectString GotText
-            }
+          , Cmd.batch
+              [ WebSocket.connect "wss://echo.websocket.org" []
+              , Http.get
+                  { url = "https://raw.githubusercontent.com/AHW214/ScrabbElm/master/assets/dictionary.txt"
+                  , expect = Http.expectString GotText
+                  }
+              ]
           )
 
 
 -- Update
 
 type Msg
-  = GotText (Result Http.Error String)
+  = SocketConnect ConnectionInfo
+  | SocketClosed Int
+  | ReceivedString String
+  | Error String
+  | GotText (Result Http.Error String)
   | GotBag (List Tile)
   | ChoseRackPlace Int
   | ChoseRackExchange Int
@@ -78,6 +93,27 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
   case msg of
+    SocketConnect info ->
+      ( { model | socketInfo = Connected info }
+      , Cmd.none
+      )
+
+    SocketClosed code ->
+      ( { model | socketInfo = Closed code }
+      , Cmd.none
+      )
+
+    ReceivedString message ->
+      Debug.todo "TODO"
+
+    Error errMsg ->
+      let
+        _ = Debug.log "Error" errMsg
+      in
+      ( model
+      , Cmd.none
+      )
+
     GotText result ->
       let
         newModel =
@@ -275,7 +311,24 @@ chooseRandomTiles i (chosen, bag) =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-  Sub.none
+  WebSocket.events
+    (\event ->
+        case event of
+          WebSocket.Connected info ->
+            SocketConnect info
+
+          WebSocket.StringMessage info message ->
+            ReceivedString message
+
+          WebSocket.Closed _ unsentBytes ->
+            SocketClosed unsentBytes
+
+          WebSocket.Error _ code ->
+            Error ("WebSocket Error: " ++ String.fromInt code)
+
+          WebSocket.BadMessage error ->
+            Error error
+    )
 
 
 -- View
