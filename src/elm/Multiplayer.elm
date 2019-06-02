@@ -2,6 +2,7 @@ module Multiplayer exposing
   ( Event(..), eventDecoder
   , exchangeEncoder, placeEncoder
   , passEncoder, endGameEncoder
+  , startGameEncoder
   )
 
 import Json.Decode as Decode exposing (Decoder)
@@ -115,8 +116,12 @@ placeEncoder bag placed =
 
 passEncoder : Value
 passEncoder =
-  eventEncoder "pass" Encode.null
+  eventEncoder "passed" Encode.null
 
 endGameEncoder : Value
 endGameEncoder =
   eventEncoder "endGame" Encode.null
+
+startGameEncoder : Value
+startGameEncoder =
+  eventEncoder "startGame" Encode.null

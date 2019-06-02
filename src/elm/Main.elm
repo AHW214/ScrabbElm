@@ -47,6 +47,7 @@ type State
   = Lobby
   | GameActive
   | GameOver
+  | NoConnection
 
 type alias Model =
   { socketInfo: SocketStatus
@@ -103,6 +104,7 @@ type Msg
   | StartExchange
   | PassTurn
   | EndTurn
+  | StartGame
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -114,7 +116,7 @@ update msg model =
             Ok ticket ->
               { model | socketInfo = Requested ticket }
             Err _ ->
-              model
+              { model | state = NoConnection }
       in
         ( newModel
         , WebSocket.connect "ws://127.0.0.1:3000" []
@@ -126,7 +128,10 @@ update msg model =
       )
 
     SocketClosed code ->
-      ( { model | socketInfo = Closed code }
+      ( { model
+          | socketInfo = Closed code
+          , state = NoConnection
+        }
       , Cmd.none
       )
 
@@ -303,7 +308,7 @@ update msg model =
             , totalScore = Debug.log "TOTAL SCORE" newScore
             , boardEmpty = boardE
           }
-        , WebSocket.sendJson
+        , WebSocket.sendJsonString
             (getConnectionInfo model.socketInfo)
             (valueOut)
         )
@@ -331,16 +336,23 @@ update msg model =
               }
       in
         ( newModel
-        , WebSocket.sendJson
+        , WebSocket.sendJsonString
             (getConnectionInfo model.socketInfo)
             (Multiplayer.exchangeEncoder newModel.bag)
         )
 
     PassTurn ->
       ( model
-      , WebSocket.sendJson
+      , WebSocket.sendJsonString
           (getConnectionInfo model.socketInfo)
           (Multiplayer.passEncoder)
+      )
+
+    StartGame ->
+      ( model
+      , WebSocket.sendJsonString
+          (getConnectionInfo model.socketInfo)
+          (Multiplayer.startGameEncoder)
       )
 
 
@@ -434,7 +446,9 @@ viewLobby model =
     [ id "wrapper" ]
     [ Html.div
         [ class "centered" ]
-        [ Html.text "Lobby" ]
+        [ Html.text "Lobby"
+        , Html.button [ onClick StartGame ] [ Html.text "Start Game" ]
+        ]
     ]
 
 viewGameOver : Model -> Html Msg
@@ -444,6 +458,15 @@ viewGameOver model =
     [ Html.div
         [ class "centered" ]
         [ Html.text "Game Over" ]
+    ]
+
+viewNoConnection : Model -> Html Msg
+viewNoConnection model =
+  Html.div
+    [ id "wrapper" ]
+    [ Html.div
+        [ class "centered" ]
+        [ Html.text "No connection to server..." ]
     ]
 
 view : Model -> Browser.Document Msg
@@ -457,5 +480,7 @@ view model =
           viewGame model
         GameOver ->
           viewGameOver model
+        NoConnection ->
+          viewNoConnection model
       ]
   }
