@@ -60,6 +60,7 @@ type alias Model =
   , turnScore : Maybe Int
   , totalScore : Int
   , boardEmpty : Bool
+  , myTurn : Bool
   }
 
 init : Flags -> ( Model, Cmd Msg )
@@ -74,6 +75,7 @@ init () = ( { socketInfo = Unopened
             , turnScore = Just 0
             , totalScore = 0
             , boardEmpty = True
+            , myTurn = False
             }
           , Cmd.batch
               [ Http.get
@@ -158,16 +160,21 @@ update msg model =
                     }
 
                 Multiplayer.Exchanged newBag ->
-                  { model | bag = newBag }
-
-                Multiplayer.Placed newBag placed ->
                   { model
-                    | bag = newBag
+                    | myTurn = True
+                    , bag = newBag
+                  }
+
+                Multiplayer.Placed newBag placed boardEmpty ->
+                  { model
+                    | myTurn = True
+                    , bag = newBag
                     , board = Board.placeAtIndices placed model.board
+                    , boardEmpty = boardEmpty
                   }
 
                 Multiplayer.Passed ->
-                  model
+                  { model | myTurn = True }
 
                 Multiplayer.EndGame ->
                   { model | state = GameOver }
@@ -279,17 +286,7 @@ update msg model =
         newScore =
           model.totalScore + turnScore
 
-        (newState, valueOut) =
-          if Rack.allEmpty newRack then
-            ( GameOver
-            , Multiplayer.endGameEncoder
-            )
-          else
-            ( GameActive
-            , Multiplayer.placeEncoder newBag placed
-            )
-
-        boardE =
+        boardEmpty =
           if model.boardEmpty == False then
             False
           else
@@ -298,15 +295,26 @@ update msg model =
                 False
               _ ->
                 model.boardEmpty
+
+        (newState, valueOut) =
+          if Rack.allEmpty newRack then
+            ( GameOver
+            , Multiplayer.endGameEncoder
+            )
+          else
+            ( GameActive
+            , Multiplayer.placeEncoder newBag placed boardEmpty
+            )
       in
         ( { model
             | state = newState
+            , myTurn = False
             , board = newBoard
             , rack = newRack
             , bag = newBag
             , turnScore = Just 0
             , totalScore = Debug.log "TOTAL SCORE" newScore
-            , boardEmpty = boardE
+            , boardEmpty = boardEmpty
           }
         , WebSocket.sendJsonString
             (getConnectionInfo model.socketInfo)
@@ -331,7 +339,8 @@ update msg model =
               model
             Just (exTiles, exBag) ->
               { model
-                  | rack = Rack.exchange exTiles model.rack
+                  | myTurn = False
+                  , rack = Rack.exchange exTiles model.rack
                   , bag = exBag
               }
       in
@@ -342,14 +351,14 @@ update msg model =
         )
 
     PassTurn ->
-      ( model
+      ( { model | myTurn = False }
       , WebSocket.sendJsonString
           (getConnectionInfo model.socketInfo)
           (Multiplayer.passEncoder)
       )
 
     StartGame ->
-      ( model
+      ( { model | myTurn = True }
       , WebSocket.sendJsonString
           (getConnectionInfo model.socketInfo)
           (Multiplayer.startGameEncoder)
@@ -429,16 +438,24 @@ viewScore s =
 
 viewGame : Model -> Html Msg
 viewGame model =
-  Html.div
-    [ id "wrapper" ]
-    [ Html.div
+  if model.myTurn then
+    Html.div
+      [ id "wrapper" ]
+      [ Html.div
+          [ class "centered" ]
+          [ Board.view ClickedBoard model.held model.board
+          , Rack.view { placeEv = ChoseRackPlace, exchangeEv = ChoseRackExchange } model.rack
+          , viewTurn model
+          ]
+      , viewScore model.totalScore
+      ]
+  else
+    Html.div
+      [ id "wrapper" ]
+      [ Html.div
         [ class "centered" ]
-        [ Board.view ClickedBoard model.held model.board
-        , Rack.view { placeEv = ChoseRackPlace, exchangeEv = ChoseRackExchange } model.rack
-        , viewTurn model
-        ]
-    , viewScore model.totalScore
-    ]
+        [ Html.text "waiting..." ]
+      ]
 
 viewLobby : Model -> Html Msg
 viewLobby model =
