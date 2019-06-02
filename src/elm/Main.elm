@@ -14,7 +14,7 @@ import Json.Decode as Decode
 import Json.Encode as Encode
 
 import RedBlackTree exposing (Tree, empty, insert, member)
-import WebSocket exposing (ConnectionInfo)
+import WebSocket exposing (ConnectionInfo, Ticket)
 import Multiplayer exposing (eventDecoder)
 import Board exposing (Board)
 import Rack exposing (Rack)
@@ -39,6 +39,7 @@ main =
 
 type SocketStatus
   = Unopened
+  | Requested Ticket
   | Connected ConnectionInfo
   | Closed Int
 
@@ -74,10 +75,13 @@ init () = ( { socketInfo = Unopened
             , boardEmpty = True
             }
           , Cmd.batch
-              [ WebSocket.connect "wss://echo.websocket.org" []
-              , Http.get
+              [ Http.get
                   { url = "https://raw.githubusercontent.com/AHW214/ScrabbElm/master/assets/dictionary.txt"
-                  , expect = Http.expectString GotText
+                  , expect = Http.expectString GotDict
+                  }
+              , Http.get
+                  { url = "http://127.0.0.1:3000"
+                  , expect = Http.expectString GotTicket
                   }
               ]
           )
@@ -90,7 +94,8 @@ type Msg
   | SocketClosed Int
   | ReceivedString String
   | Error String
-  | GotText (Result Http.Error String)
+  | GotTicket (Result Http.Error String)
+  | GotDict (Result Http.Error String)
   | ChoseRackPlace Int
   | ChoseRackExchange Int
   | ClickedBoard Int Int
@@ -102,9 +107,22 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
   case msg of
+    GotTicket result ->
+      let
+        newModel =
+          case result of
+            Ok ticket ->
+              { model | socketInfo = Requested ticket }
+            Err _ ->
+              model
+      in
+        ( newModel
+        , WebSocket.connect "ws://127.0.0.1:3000" []
+        )
+
     SocketConnect info ->
       ( { model | socketInfo = Connected info }
-      , Cmd.none
+      , WebSocket.sendString info (getConnectionTicket model.socketInfo)
       )
 
     SocketClosed code ->
@@ -161,12 +179,12 @@ update msg model =
       , Cmd.none
       )
 
-    GotText result ->
+    GotDict result ->
       let
         newModel =
           case result of
-            Ok fulltext ->
-              { model | dict = loadDictionary fulltext }
+            Ok text ->
+              { model | dict = loadDictionary text }
             Err _ ->
               model
       in
@@ -328,6 +346,14 @@ update msg model =
 
 loadDictionary : String -> Tree String
 loadDictionary = RedBlackTree.fromList << String.words
+
+getConnectionTicket : SocketStatus -> Ticket
+getConnectionTicket socketInfo =
+  case socketInfo of
+    Requested ticket ->
+      ticket
+    _ ->
+      Debug.todo "Not connected to server."
 
 getConnectionInfo : SocketStatus -> ConnectionInfo
 getConnectionInfo socketInfo =
