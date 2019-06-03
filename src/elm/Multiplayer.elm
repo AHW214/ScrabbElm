@@ -2,7 +2,7 @@ module Multiplayer exposing
   ( Event(..), eventDecoder
   , exchangeEncoder, placeEncoder
   , passEncoder, endGameEncoder
-  , startGameEncoder
+  , startGameEncoder, serverIP
   )
 
 import Json.Decode as Decode exposing (Decoder)
@@ -19,6 +19,10 @@ type alias Bag
 
 type alias Placed
   = List (Index, Tile)
+
+serverIP : String
+serverIP =
+  "18.191.239.101:3000"
 
 bagDecoder : Decoder Bag
 bagDecoder =

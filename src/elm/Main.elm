@@ -83,7 +83,7 @@ init () = ( { socketInfo = Unopened
                   , expect = Http.expectString GotDict
                   }
               , Http.get
-                  { url = "http://127.0.0.1:3000"
+                  { url = ("http://" ++ Multiplayer.serverIP)
                   , expect = Http.expectString GotTicket
                   }
               ]
@@ -121,7 +121,7 @@ update msg model =
               { model | state = NoConnection }
       in
         ( newModel
-        , WebSocket.connect "ws://127.0.0.1:3000" []
+        , WebSocket.connect ("ws://" ++ Multiplayer.serverIP) []
         )
 
     SocketConnect info ->
