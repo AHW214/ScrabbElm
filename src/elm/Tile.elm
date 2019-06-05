@@ -1,8 +1,9 @@
 module Tile exposing
   ( Tile, blank, letter
-  , score, char, string
-  , exchange, encoder
-  , decoder, view
+  , isBlank, score, char
+  , string, exchange
+  , encoder, decoder
+  , view
   )
 
 import Random.List
@@ -60,6 +61,14 @@ blank = Blank
 letter : Char -> Tile
 letter c = Letter c (value c)
 
+isBlank : Tile -> Bool
+isBlank tile =
+  case tile of
+    Blank ->
+      True
+    _ ->
+      False
+
 score : Tile -> Int
 score tile =
   case tile of
@@ -69,8 +78,10 @@ score tile =
 char : Tile -> Char
 char tile =
   case tile of
-  Letter c _ -> c
-  Blank -> Debug.todo "Tile.char: Impossible"
+  Letter c _ ->
+    c
+  Blank ->
+    Debug.todo "Tile.char: Impossible"
 
 string : Tile -> String
 string =

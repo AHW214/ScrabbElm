@@ -60,6 +60,7 @@ type alias Model =
   , turnScore : Maybe Int
   , totalScore : Int
   , boardEmpty : Bool
+  , settingBlank : Bool
   , myTurn : Bool
   }
 
@@ -75,6 +76,7 @@ init () = ( { socketInfo = Unopened
             , turnScore = Just 0
             , totalScore = 0
             , boardEmpty = True
+            , settingBlank = False
             , myTurn = False
             }
           , Cmd.batch
@@ -102,6 +104,7 @@ type Msg
   | ChoseRackPlace Int
   | ChoseRackExchange Int
   | ClickedBoard Int Int
+  | SetBlank Char
   | EndExchange (Maybe (List Tile, List Tile))
   | StartExchange
   | PassTurn
@@ -219,10 +222,18 @@ update msg model =
                 model.rack
                 |> Rack.return j
                 |> Rack.take i
+
+        settingBlank =
+          case taken of
+            Nothing ->
+              False
+            Just (_, tile) ->
+              Tile.isBlank tile
       in
         ( { model
             | held = taken
             , rack = newRack
+            , settingBlank = settingBlank
           }
         , Cmd.none
         )
@@ -265,6 +276,14 @@ update msg model =
           }
         , Cmd.none
         )
+
+    SetBlank c ->
+      ( { model
+          | held = Maybe.map (Tuple.mapSecond (always (Tile.letter c))) model.held
+          , settingBlank = False
+        }
+      , Cmd.none
+      )
 
     EndTurn ->
       let
@@ -438,23 +457,27 @@ viewScore s =
 
 viewGame : Model -> Html Msg
 viewGame model =
-  if model.myTurn then
+  let
+    defaultRackEvs =
+      { placeEv = ChoseRackPlace, exchangeEv = ChoseRackExchange }
+
+    ( boardEv, rackEvs ) =
+      if not model.myTurn then
+        ( Nothing, Nothing )
+      else if model.settingBlank then
+        ( Nothing, Just defaultRackEvs )
+      else
+        ( Just ClickedBoard, Just defaultRackEvs )
+  in
     Html.div
       [ id "wrapper" ]
       [ Html.div
           [ class "centered" ]
-          [ Board.view ClickedBoard model.held model.board
-          , Rack.view { placeEv = ChoseRackPlace, exchangeEv = ChoseRackExchange } model.rack
+          [ Board.view boardEv model.held model.board
+          , Rack.view rackEvs model.rack
           , viewTurn model
           ]
       , viewScore model.totalScore
-      ]
-  else
-    Html.div
-      [ id "wrapper" ]
-      [ Html.div
-        [ class "centered" ]
-        [ Html.text "waiting..." ]
       ]
 
 viewLobby : Model -> Html Msg

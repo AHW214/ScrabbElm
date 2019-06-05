@@ -211,20 +211,24 @@ viewCell handlers cell =
       (attr ++ handlers)
       html
 
-view : Events msg -> Rack -> Html msg
-view { placeEv, exchangeEv } (R mode cells) =
+view : Maybe (Events msg) -> Rack -> Html msg
+view maybeEvs (R mode cells) =
   let
     handlers i =
-      case mode of
-        Place ->
-          if anyChosen cells then
-            [ onClick (placeEv i) ]
-          else
-            [ onClick (placeEv i)
-            , onRightClick (exchangeEv i)
-            ]
-        Exchange ->
-          [ onRightClick (exchangeEv i) ]
+      case maybeEvs of
+        Nothing ->
+          []
+        Just { placeEv, exchangeEv } ->
+          case mode of
+            Place ->
+              if anyChosen cells then
+                [ onClick (placeEv i) ]
+              else
+                [ onClick (placeEv i)
+                , onRightClick (exchangeEv i)
+                ]
+            Exchange ->
+              [ onRightClick (exchangeEv i) ]
 
     modeStr =
       case mode of
