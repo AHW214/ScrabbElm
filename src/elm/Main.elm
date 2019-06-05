@@ -422,7 +422,8 @@ update msg model =
 
     ReturnToLobby ->
       ( { model
-          | myScore = 0
+          | state = Lobby
+          , myScore = 0
           , opponent = Nothing
         }
       , Cmd.none
