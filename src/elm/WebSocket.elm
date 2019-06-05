@@ -55,7 +55,7 @@ type Event
   = Connected ConnectionInfo
   | StringMessage ConnectionInfo String
   | Closed ConnectionInfo Int (Maybe String)
-  | Error ConnectionInfo Int
+  | Error ConnectionInfo
   | BadMessage String
 
 events : (Event -> msg) -> Sub msg
@@ -91,9 +91,8 @@ eventDecoder =
                   (Decode.at [ "msg", "reason" ] (Decode.nullable Decode.string))
 
               "error" ->
-                Decode.map2 Error
+                Decode.map Error
                 (Decode.field "msg" connectionDecoder)
-                (Decode.at [ "msg", "code" ] Decode.int)
 
               _ ->
                 Decode.succeed (BadMessage ("Unknown message type: " ++ msgType))

@@ -479,8 +479,8 @@ subscriptions model =
               WebSocket.Closed _ unsentBytes reason ->
                 SocketClosed unsentBytes reason
 
-              WebSocket.Error _ code ->
-                Error ("WebSocket Error: " ++ String.fromInt code)
+              WebSocket.Error _ ->
+                Error "WebSocket Error"
 
               WebSocket.BadMessage error ->
                 Error error

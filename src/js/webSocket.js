@@ -111,8 +111,7 @@ function errorHandler(toElm, socket, url, event)
       url: url,
       binaryType: socket.binaryType,
       extensions: socket.extensions,
-      protocol: socket.protocol,
-      code: event.code
+      protocol: socket.protocol
     }
   });
 }
