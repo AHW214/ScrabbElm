@@ -162,7 +162,10 @@ update msg model =
                   { model | opponent = Just player }
 
                 Multiplayer.PlayerLeft player ->
-                  { model | opponent = Nothing }
+                  { model
+                    | state = GameOver
+                    , opponent = Nothing
+                  }
 
                 Multiplayer.StartGame bag ->
                   let
