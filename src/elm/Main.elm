@@ -64,20 +64,23 @@ type alias Model =
   , opponent : Maybe Player
   }
 
+initModel : Model
+initModel =
+  { socketInfo = Unopened
+  , state = Lobby
+  , dict = empty
+  , board = Board.init
+  , rack = Rack.empty
+  , bag = []
+  , held = Nothing
+  , turnScore = Just 0
+  , myScore = 0
+  , myTurn = False
+  , opponent = Nothing
+  }
+
 init : Flags -> ( Model, Cmd Msg )
-init () = ( { socketInfo = Unopened
-            , state = Lobby
-            , dict = empty
-            , board = Board.init
-            , rack = Rack.empty
-            , bag = []
-            , held = Nothing
-            --Changed from Nothing as that more accurately depicts a move without doing anything
-            , turnScore = Just 0
-            , myScore = 0
-            , myTurn = False
-            , opponent = Nothing
-            }
+init () = ( initModel
           , Cmd.batch
               [ Http.get
                   { url = "https://raw.githubusercontent.com/AHW214/ScrabbElm/master/assets/dictionary.txt"
@@ -155,6 +158,9 @@ update msg model =
                   { model
                     | opponent = Just player
                   }
+
+                Multiplayer.PlayerLeft player ->
+                  initModel
 
                 Multiplayer.StartGame bag ->
                   let

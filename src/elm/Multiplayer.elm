@@ -62,6 +62,7 @@ placedDecoder =
 
 type Event
   = PlayerJoined Player
+  | PlayerLeft Player
   | StartGame Bag
   | Passed
   | Exchanged Bag
@@ -76,6 +77,10 @@ eventDecoder =
         case event of
           "playerJoined" ->
             Decode.map PlayerJoined
+              (Decode.at [ "data", "player" ] Player.decoder)
+
+          "playerLeft" ->
+            Decode.map PlayerLeft
               (Decode.at [ "data", "player" ] Player.decoder)
 
           "startGame" ->

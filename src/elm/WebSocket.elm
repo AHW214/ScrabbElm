@@ -28,6 +28,14 @@ connect url protocols =
     )
     |> toSocket
 
+disconnect : String -> Cmd msg
+disconnect url =
+  message "connect"
+    (Encode.object
+      [ ( "url", Encode.string url ) ]
+    )
+    |> toSocket
+
 sendString : ConnectionInfo -> String -> Cmd msg
 sendString connection text =
   message "sendString"
