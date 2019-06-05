@@ -588,13 +588,28 @@ viewLobby { opponent } =
       ]
 
 viewGameOver : Model -> Html Msg
-viewGameOver model =
-  Html.div
-    [ id "wrapper" ]
-    [ Html.div
-        [ class "centered" ]
-        [ Html.text "Game Over" ]
-    ]
+viewGameOver { myScore, opponent } =
+  let
+    resultText =
+      case opponent of
+        Just opp ->
+          let
+            startStr =
+              if myScore > opp.score then
+                "Congratulations! You won "
+              else
+                "Darn, looks like you lost "
+            in
+              startStr ++ String.fromInt myScore ++ " to " ++ String.fromInt opp.score ++ "."
+        Nothing ->
+          Debug.todo "viewGameOver: Impossible"
+  in
+    Html.div
+      [ id "wrapper" ]
+      [ Html.div
+          [ id "resultScreen", class "centered" ]
+          [ Html.text resultText ]
+      ]
 
 viewNoConnection : String -> Html Msg
 viewNoConnection message =
