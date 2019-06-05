@@ -67,7 +67,7 @@ type Event
   | Passed
   | Exchanged Bag
   | Placed Bag Placed Int
-  | EndGame
+  | EndGame Int
 
 eventDecoder : Decoder Event
 eventDecoder =
@@ -101,7 +101,8 @@ eventDecoder =
             Decode.succeed Passed
 
           "endGame" ->
-            Decode.succeed EndGame
+            Decode.map EndGame
+              (Decode.at [ "data", "score" ] Decode.int)
 
           _ ->
             Decode.fail "Unknown server event: "
@@ -135,9 +136,12 @@ passEncoder : Value
 passEncoder =
   eventEncoder "passed" Encode.null
 
-endGameEncoder : Value
-endGameEncoder =
-  eventEncoder "endGame" Encode.null
+endGameEncoder : Int -> Value
+endGameEncoder score =
+  eventEncoder "endGame"
+    (Encode.object
+      [ ( "score", Encode.int score ) ]
+    )
 
 startGameEncoder : Value
 startGameEncoder =

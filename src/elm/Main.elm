@@ -204,10 +204,11 @@ update msg model =
                     | myTurn = True
                     , consecutivePasses = model.consecutivePasses + 1 }
 
-                Multiplayer.EndGame ->
+                Multiplayer.EndGame theirScore ->
                   { model
                     | state = GameOver
                     , myTurn = False
+                    , opponent = Maybe.map (Player.setScore theirScore) model.opponent
                   }
       in
         ( newModel
@@ -344,7 +345,7 @@ update msg model =
         (newState, valueOut) =
           if Rack.allEmpty newRack then
             ( GameOver
-            , Multiplayer.endGameEncoder
+            , Multiplayer.endGameEncoder model.myScore
             )
           else
             ( GameActive
@@ -420,7 +421,7 @@ update msg model =
         }
       , WebSocket.sendJsonString
           (getConnectionInfo model.socketInfo)
-          (Multiplayer.endGameEncoder)
+          (Multiplayer.endGameEncoder model.myScore)
       )
 
     ReturnToLobby ->
