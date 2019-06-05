@@ -170,10 +170,14 @@ update msg model =
                   in
                     { model
                       | state = GameActive
+                      , board = Board.init
                       , rack = newRack
                       , bag = newBag
+                      , held = Nothing
+                      , turnScore = Just 0
                       , myScore = 0
                       , opponent = Maybe.map (Player.setScore 0) model.opponent
+                      , consecutivePasses = 0
                     }
 
                 Multiplayer.Exchanged newBag ->
@@ -198,7 +202,10 @@ update msg model =
                     , consecutivePasses = model.consecutivePasses + 1 }
 
                 Multiplayer.EndGame ->
-                  { model | state = GameOver }
+                  { model
+                    | state = GameOver
+                    , myTurn = False
+                  }
       in
         ( newModel
         , Cmd.none
@@ -405,12 +412,8 @@ update msg model =
 
     EndGame ->
       ( { model
-        | state = GameOver
-        , board = Board.init
-        , held = Nothing
-        , turnScore = Just 0
-        , myTurn = False
-        , consecutivePasses = 0
+          | state = GameOver
+          , myTurn = False
         }
       , WebSocket.sendJsonString
           (getConnectionInfo model.socketInfo)
