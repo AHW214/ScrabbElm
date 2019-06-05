@@ -62,6 +62,7 @@ type alias Model =
   , myScore : Int
   , myTurn : Bool
   , opponent : Maybe Player
+  , consecutivePasses : Int
   }
 
 initModel : Model
@@ -77,6 +78,7 @@ initModel =
   , myScore = 0
   , myTurn = False
   , opponent = Nothing
+  , consecutivePasses = 0
   }
 
 init : Flags -> ( Model, Cmd Msg )
@@ -112,6 +114,7 @@ type Msg
   | PassTurn
   | EndTurn
   | StartGame
+  | EndGame
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -176,6 +179,7 @@ update msg model =
                   { model
                     | myTurn = True
                     , bag = newBag
+                    , consecutivePasses = model.consecutivePasses + 1
                   }
 
                 Multiplayer.Placed newBag placed theirScore ->
@@ -184,10 +188,13 @@ update msg model =
                     , bag = newBag
                     , board = Board.placeAtIndices placed model.board
                     , opponent = Maybe.map (Player.setScore theirScore) model.opponent
+                    , consecutivePasses = 0
                   }
 
                 Multiplayer.Passed ->
-                  { model | myTurn = True }
+                  { model
+                    | myTurn = True
+                    , consecutivePasses = model.consecutivePasses + 1 }
 
                 Multiplayer.EndGame ->
                   { model | state = GameOver }
@@ -341,6 +348,7 @@ update msg model =
             , bag = newBag
             , turnScore = Just 0
             , myScore = Debug.log "TOTAL SCORE" newScore
+            , consecutivePasses = 0
           }
         , WebSocket.sendJsonString
             (getConnectionInfo model.socketInfo)
@@ -368,6 +376,7 @@ update msg model =
                   | myTurn = False
                   , rack = Rack.exchange exTiles model.rack
                   , bag = exBag
+                  , consecutivePasses = model.consecutivePasses + 1
               }
       in
         ( newModel
@@ -377,7 +386,10 @@ update msg model =
         )
 
     PassTurn ->
-      ( { model | myTurn = False }
+      ( { model
+        | myTurn = False
+        , consecutivePasses = model.consecutivePasses + 1
+        }
       , WebSocket.sendJsonString
           (getConnectionInfo model.socketInfo)
           (Multiplayer.passEncoder)
@@ -388,6 +400,13 @@ update msg model =
       , WebSocket.sendJsonString
           (getConnectionInfo model.socketInfo)
           (Multiplayer.startGameEncoder)
+      )
+
+    EndGame ->
+      ( { model | state = GameOver }
+      , WebSocket.sendJsonString
+          (getConnectionInfo model.socketInfo)
+          (Multiplayer.endGameEncoder)
       )
 
 
@@ -463,30 +482,57 @@ toLetter str =
 
 -- View
 
-viewTurn : Model -> Html Msg
-viewTurn { rack, held, bag, turnScore, myTurn } =
-  let
-    (attr, html) =
-      if not myTurn then
-        ([], [ Html.text "Opponent's turn..." ])
-      else if isSettingBlank held then
-        ([], [ Html.text "Choose a letter" ])
-      else if Rack.exchanging rack then
-        if List.length bag < Rack.size then
-          ([], [ Html.text "Not enough tiles..." ])
+viewTurn : Model -> List (Html Msg)
+viewTurn { rack, held, bag, turnScore, myTurn, consecutivePasses } =
+  if not myTurn then
+    [ Html.button
+      []
+      [ Html.text "Opponent's turn..." ]
+    ]
+  else if isSettingBlank held then
+    [ Html.button
+        []
+        [ Html.text "Choose a letter" ]
+    ]
+  else if Rack.exchanging rack then
+    if List.length bag < Rack.size then
+      [ Html.button
+          []
+          [ Html.text "Not enough tiles..." ]
+      ]
+    else
+      [ Html.button
+          [ onClick StartExchange ]
+          [ Html.text "Exchange Tiles." ]
+      ]
+  else
+    case turnScore of
+      Nothing ->
+        [ Html.button
+            []
+            [ Html.text "Finish your move..." ]
+        ]
+      Just score ->
+        if score > 0 || Rack.allChosenBlank rack then
+          [ Html.button
+              [ onClick EndTurn ]
+              [ Html.text "End turn." ]
+          ]
         else
-          ([ onClick StartExchange ], [ Html.text "Exchange Tiles." ])
-      else
-        case turnScore of
-          Nothing ->
-            ([], [ Html.text "Finish your move..." ])
-          Just score ->
-            if score > 0 || Rack.allChosenBlank rack then
-              ([ onClick EndTurn ], [ Html.text "End turn." ])
-            else
-              ([ onClick PassTurn ], [ Html.text "Pass turn." ])
-  in
-    Html.button attr html
+          let
+            endGame =
+              if consecutivePasses >= 6 then
+                [ Html.button
+                    [ onClick EndGame ]
+                    [ Html.text "End game?" ]
+                ]
+              else
+                []
+            in
+            [ Html.button
+                [ onClick PassTurn ]
+                [ Html.text "Pass turn." ]
+            ] ++ endGame
 
 viewScore : Int -> Int -> Html Msg
 viewScore myScore theirScore =
@@ -515,11 +561,10 @@ viewGame model =
       [ id "wrapper" ]
       [ Html.div
           [ class "centered" ]
-          [ viewScore model.myScore <| Maybe.withDefault 0 <| Maybe.map (.score) model.opponent
+          ([ viewScore model.myScore <| Maybe.withDefault 0 <| Maybe.map (.score) model.opponent
           , Board.view boardEv model.held model.board
           , Rack.view rackEvs model.rack
-          , viewTurn model
-          ]
+          ] ++ viewTurn model)
       ]
 
 viewLobby : Model -> Html Msg
