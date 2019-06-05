@@ -19,6 +19,13 @@ body {
   text-align: center;
 }
 
+.no-select {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
 #rack {
   display: grid;
   grid-template-columns: repeat(7, auto);

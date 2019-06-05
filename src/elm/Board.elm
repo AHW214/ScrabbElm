@@ -264,7 +264,7 @@ view maybeEv held (B pending matrix) =
           [ onClick (event i j) ]
   in
     Html.div
-      [ id "board" ]
+      [ id "board", class "no-select" ]
       (matrix
         |> Matrix.indexedMap (\i j -> viewCell (hover ++ handlers i j))
         |> Matrix.toLists

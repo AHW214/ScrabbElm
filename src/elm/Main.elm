@@ -115,6 +115,7 @@ type Msg
   | EndTurn
   | StartGame
   | EndGame
+  | ReturnToLobby
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -158,12 +159,10 @@ update msg model =
             Ok event ->
               case event of
                 Multiplayer.PlayerJoined player ->
-                  { model
-                    | opponent = Just player
-                  }
+                  { model | opponent = Just player }
 
                 Multiplayer.PlayerLeft player ->
-                  initModel
+                  { model | opponent = Nothing }
 
                 Multiplayer.StartGame bag ->
                   let
@@ -173,6 +172,8 @@ update msg model =
                       | state = GameActive
                       , rack = newRack
                       , bag = newBag
+                      , myScore = 0
+                      , opponent = Maybe.map (Player.setScore 0) model.opponent
                     }
 
                 Multiplayer.Exchanged newBag ->
@@ -403,10 +404,25 @@ update msg model =
       )
 
     EndGame ->
-      ( { model | state = GameOver }
+      ( { model
+        | state = GameOver
+        , board = Board.init
+        , held = Nothing
+        , turnScore = Just 0
+        , myTurn = False
+        , consecutivePasses = 0
+        }
       , WebSocket.sendJsonString
           (getConnectionInfo model.socketInfo)
           (Multiplayer.endGameEncoder)
+      )
+
+    ReturnToLobby ->
+      ( { model
+          | myScore = 0
+          , opponent = Nothing
+        }
+      , Cmd.none
       )
 
 
@@ -590,7 +606,7 @@ viewLobby { opponent } =
 viewGameOver : Model -> Html Msg
 viewGameOver { myScore, opponent } =
   let
-    resultText =
+    (resultText, (buttonAttr, buttonHtml)) =
       case opponent of
         Just opp ->
           let
@@ -602,15 +618,25 @@ viewGameOver { myScore, opponent } =
               else
                 "Woah, you tied "
             in
-              startStr ++ String.fromInt myScore ++ " to " ++ String.fromInt opp.score ++ "."
+              ( startStr ++ String.fromInt myScore ++ " to " ++ String.fromInt opp.score ++ "."
+              , ( [ onClick StartGame ]
+                , [ Html.text "Rematch?" ]
+                )
+              )
         Nothing ->
-          Debug.todo "viewGameOver: Impossible"
+          (  "Looks like your opponent left..."
+          , ( [ onClick ReturnToLobby ]
+            , [ Html.text "Return to lobby." ]
+            )
+          )
   in
     Html.div
       [ id "wrapper" ]
       [ Html.div
           [ id "resultScreen", class "centered" ]
-          [ Html.text resultText ]
+          [ Html.text resultText
+          , Html.button buttonAttr buttonHtml
+          ]
       ]
 
 viewNoConnection : String -> Html Msg

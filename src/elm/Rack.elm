@@ -261,7 +261,7 @@ view maybeEvs (R mode cells) =
           "exchange"
   in
     Html.div
-    [ id "rack", class modeStr ]
+    [ id "rack", class "no-select", class modeStr ]
     (cells
       |> Array.indexedMap (viewCell << handlers)
       |> Array.toList)
