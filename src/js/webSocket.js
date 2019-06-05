@@ -113,7 +113,8 @@ function closeHandler(toElm, sockets, url, event)
       binaryType: socket.binaryType,
       extensions: socket.extensions,
       protocol: socket.protocol,
-      unsentBytes: socket.bufferedAmount
+      unsentBytes: socket.bufferedAmount,
+      reason: event.reason
     }
   });
 }

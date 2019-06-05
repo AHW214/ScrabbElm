@@ -65,7 +65,7 @@ type Event
   | StartGame Bag
   | Passed
   | Exchanged Bag
-  | Placed Bag Placed Bool
+  | Placed Bag Placed Int
   | EndGame
 
 eventDecoder : Decoder Event
@@ -90,7 +90,7 @@ eventDecoder =
             Decode.map3 Placed
               (Decode.at [ "data", "bag" ] bagDecoder)
               (Decode.at [ "data", "placed" ] placedDecoder)
-              (Decode.at [ "data", "boardEmpty" ] Decode.bool)
+              (Decode.at [ "data", "score" ] Decode.int)
 
           "passed" ->
             Decode.succeed Passed
@@ -116,13 +116,13 @@ exchangeEncoder bag =
       [ ( "bag", bagEncoder bag ) ]
     )
 
-placeEncoder : Bag -> Placed -> Bool -> Value
-placeEncoder bag placed boardEmpty =
+placeEncoder : Bag -> Placed -> Int -> Value
+placeEncoder bag placed score =
   eventEncoder "placed"
     (Encode.object
       [ ( "bag", bagEncoder bag )
       , ( "placed", placedEncoder placed )
-      , ( "boardEmpty", Encode.bool boardEmpty )
+      , ( "score", Encode.int score )
       ]
     )
 

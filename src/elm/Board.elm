@@ -1,5 +1,5 @@
 module Board exposing
-  ( Board, init, set
+  ( Board, init, set, isEmpty
   , getTileAt, placePending
   , placeAtIndices, view
   , pendingTilesWordCheck
@@ -180,6 +180,17 @@ getTileAt i j (B _ mat) =
       getTile state
     _ ->
       Debug.todo "Should not happen"
+
+isEmpty : Board -> Bool
+isEmpty (B _ matrix) =
+  let
+    halfSize = size // 2
+  in
+    case Matrix.get halfSize halfSize matrix of
+      Just (C _ (Placed _)) ->
+        False
+      _ ->
+        True
 
 
 type alias Properties msg

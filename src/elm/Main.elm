@@ -42,13 +42,13 @@ type SocketStatus
   = Unopened
   | Requested Ticket
   | Connected ConnectionInfo
-  | Closed Int
+  | Closed Int (Maybe String)
 
 type State
   = Lobby
   | GameActive
   | GameOver
-  | NoConnection
+  | NoConnection String
 
 type alias Model =
   { socketInfo: SocketStatus
@@ -60,8 +60,6 @@ type alias Model =
   , held : Maybe (Int, Tile)
   , turnScore : Maybe Int
   , myScore : Int
-  , theirScore : Int
-  , boardEmpty : Bool
   , myTurn : Bool
   , opponent : Maybe Player
   }
@@ -77,8 +75,6 @@ init () = ( { socketInfo = Unopened
             --Changed from Nothing as that more accurately depicts a move without doing anything
             , turnScore = Just 0
             , myScore = 0
-            , theirScore = 0
-            , boardEmpty = True
             , myTurn = False
             , opponent = Nothing
             }
@@ -99,7 +95,7 @@ init () = ( { socketInfo = Unopened
 
 type Msg
   = SocketConnect ConnectionInfo
-  | SocketClosed Int
+  | SocketClosed Int (Maybe String)
   | ReceivedString String
   | Error String
   | GotTicket (Result Http.Error String)
@@ -124,7 +120,7 @@ update msg model =
             Ok ticket ->
               { model | socketInfo = Requested ticket }
             Err _ ->
-              { model | state = NoConnection }
+              { model | state = NoConnection "Failed to receive ticket from server" }
       in
         ( newModel
         , WebSocket.connect ("ws://" ++ Multiplayer.serverIP) []
@@ -135,10 +131,10 @@ update msg model =
       , WebSocket.sendString info (getConnectionTicket model.socketInfo)
       )
 
-    SocketClosed code ->
+    SocketClosed code reason ->
       ( { model
-          | socketInfo = Closed code
-          , state = NoConnection
+          | socketInfo = Closed code reason
+          , state = NoConnection (Maybe.withDefault "No connection to server..." reason)
         }
       , Cmd.none
       )
@@ -176,12 +172,12 @@ update msg model =
                     , bag = newBag
                   }
 
-                Multiplayer.Placed newBag placed boardEmpty ->
+                Multiplayer.Placed newBag placed theirScore ->
                   { model
                     | myTurn = True
                     , bag = newBag
                     , board = Board.placeAtIndices placed model.board
-                    , boardEmpty = boardEmpty
+                    , opponent = Maybe.map (Player.setScore theirScore) model.opponent
                   }
 
                 Multiplayer.Passed ->
@@ -253,7 +249,7 @@ update msg model =
           Board.set i j model.held model.board
 
         validator =
-          if model.boardEmpty then
+          if Board.isEmpty model.board then
             Board.pendingTilesCheckFirstTurn
           else
             Board.pendingTilesWordCheck
@@ -321,16 +317,6 @@ update msg model =
         newScore =
           model.myScore + turnScore
 
-        boardEmpty =
-          if model.boardEmpty == False then
-            False
-          else
-            case Board.getTileAt 7 7 newBoard of
-              Just _ ->
-                False
-              _ ->
-                model.boardEmpty
-
         (newState, valueOut) =
           if Rack.allEmpty newRack then
             ( GameOver
@@ -338,7 +324,7 @@ update msg model =
             )
           else
             ( GameActive
-            , Multiplayer.placeEncoder newBag placed boardEmpty
+            , Multiplayer.placeEncoder newBag placed newScore
             )
       in
         ( { model
@@ -349,7 +335,6 @@ update msg model =
             , bag = newBag
             , turnScore = Just 0
             , myScore = Debug.log "TOTAL SCORE" newScore
-            , boardEmpty = boardEmpty
           }
         , WebSocket.sendJsonString
             (getConnectionInfo model.socketInfo)
@@ -441,8 +426,8 @@ subscriptions model =
               WebSocket.StringMessage info message ->
                 ReceivedString message
 
-              WebSocket.Closed _ unsentBytes ->
-                SocketClosed unsentBytes
+              WebSocket.Closed _ unsentBytes reason ->
+                SocketClosed unsentBytes reason
 
               WebSocket.Error _ code ->
                 Error ("WebSocket Error: " ++ String.fromInt code)
@@ -524,7 +509,7 @@ viewGame model =
       [ id "wrapper" ]
       [ Html.div
           [ class "centered" ]
-          [ viewScore model.myScore model.theirScore
+          [ viewScore model.myScore <| Maybe.withDefault 0 <| Maybe.map (.score) model.opponent
           , Board.view boardEv model.held model.board
           , Rack.view rackEvs model.rack
           , viewTurn model
@@ -560,13 +545,13 @@ viewGameOver model =
         [ Html.text "Game Over" ]
     ]
 
-viewNoConnection : Model -> Html Msg
-viewNoConnection model =
+viewNoConnection : String -> Html Msg
+viewNoConnection message =
   Html.div
     [ id "wrapper" ]
     [ Html.div
-        [ class "centered" ]
-        [ Html.text "No connection to server..." ]
+        [ id "noConnection", class "centered" ]
+        [ Html.text message ]
     ]
 
 view : Model -> Browser.Document Msg
@@ -580,8 +565,8 @@ view model =
           viewGame model
         GameOver ->
           viewGameOver model
-        NoConnection ->
-          viewNoConnection model
+        NoConnection message ->
+          viewNoConnection message
       ]
   }
 

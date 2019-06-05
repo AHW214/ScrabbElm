@@ -46,7 +46,7 @@ sendJsonString connection =
 type Event
   = Connected ConnectionInfo
   | StringMessage ConnectionInfo String
-  | Closed ConnectionInfo Int
+  | Closed ConnectionInfo Int (Maybe String)
   | Error ConnectionInfo Int
   | BadMessage String
 
@@ -77,9 +77,10 @@ eventDecoder =
                   (Decode.at [ "msg", "data" ] Decode.string)
 
               "closed" ->
-                Decode.map2 Closed
+                Decode.map3 Closed
                   (Decode.field "msg" connectionDecoder)
                   (Decode.at [ "msg", "unsentBytes" ] Decode.int)
+                  (Decode.at [ "msg", "reason" ] (Decode.nullable Decode.string))
 
               "error" ->
                 Decode.map2 Error

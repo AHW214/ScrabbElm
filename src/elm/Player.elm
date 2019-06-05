@@ -1,4 +1,4 @@
-module Player exposing (Player, init, decoder)
+module Player exposing (Player, init, setScore, decoder)
 
 import Json.Decode as Decode exposing (Decoder)
 
@@ -16,3 +16,7 @@ decoder =
   Decode.map2 Player
     (Decode.field "name" Decode.string)
     (Decode.field "score" Decode.int)
+
+setScore : Int -> Player -> Player
+setScore newScore player =
+  { player | score = newScore }
