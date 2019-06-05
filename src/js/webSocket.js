@@ -15,6 +15,9 @@ function bind(app)
       case "connect":
         openWebSocket(message.msg);
         break;
+      case "disconnect":
+          closeWebSocket(message.msg);
+          break;
       case "sendString":
         sendString(message.msg);
         break;
@@ -37,6 +40,19 @@ function bind(app)
       socket.onclose = closeHandler.bind(null, toElm, sockets, request.url);
 
       sockets[request.url] = socket;
+    }
+
+    function closeWebSocket(request)
+    {
+      let socket = sockets[request.url];
+      if (!socket)
+      {
+        return;
+      }
+
+      socket.close();
+
+      sockets[request.url] = undefined;
     }
 
     function sendString(request)
@@ -113,7 +129,8 @@ function closeHandler(toElm, sockets, url, event)
       binaryType: socket.binaryType,
       extensions: socket.extensions,
       protocol: socket.protocol,
-      unsentBytes: socket.bufferedAmount
+      unsentBytes: socket.bufferedAmount,
+      reason: event.reason
     }
   });
 }

@@ -1,12 +1,22 @@
-module Player exposing (..)
+module Player exposing (Player, init, setScore, decoder)
 
-import Rack as R
+import Json.Decode as Decode exposing (Decoder)
 
-type alias Player = { rack : R.Rack, points : Int }
+type alias Player
+  = { name : String
+    , score : Int
+    }
 
-newPlayer : Player 
-newPlayer = { rack = R.empty, points = 0 }
+init : Player
+init =
+    Player "Anon" 0
 
+decoder : Decoder Player
+decoder =
+  Decode.map2 Player
+    (Decode.field "name" Decode.string)
+    (Decode.field "score" Decode.int)
 
-
-
+setScore : Int -> Player -> Player
+setScore newScore player =
+  { player | score = newScore }

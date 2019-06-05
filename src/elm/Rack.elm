@@ -5,13 +5,14 @@ module Rack exposing
   , return, replenish
   , exchange, exchanging
   , tilesToExchange, allEmpty
-  , view
+  , updateBlank, view
+  , allChosenBlank
   )
 
 import Array exposing (Array)
 import Html exposing (Html)
 import Html.Events exposing (onClick, preventDefaultOn)
-import Html.Attributes exposing (class)
+import Html.Attributes exposing (id, class)
 import Json.Decode as Decode
 
 import Tile exposing (Tile)
@@ -52,13 +53,10 @@ exchanging (R mode _) =
 getChosenTile : Cell -> Maybe Tile
 getChosenTile cell =
   case cell of
-    Empty ->
+    Occupied True tile ->
+      Just tile
+    _ ->
       Nothing
-    Occupied chosen tile ->
-      if chosen then
-        Just tile
-      else
-        Nothing
 
 isChosen : Cell -> Bool
 isChosen cell =
@@ -75,6 +73,20 @@ anyChosen cells =
       Array.foldl ((||) << f) False
   in
     anyArray isChosen cells
+
+allChosenBlank : Rack -> Bool
+allChosenBlank (R _ cells) =
+  let
+    blanks =
+      Array.filter (\c ->
+        case getChosenTile c of
+          Just tile ->
+            Tile.isBlank tile
+          _ ->
+            False
+      ) cells
+  in
+    Array.length blanks == Tile.numBlanks
 
 isEmpty : Cell -> Bool
 isEmpty cell =
@@ -109,34 +121,43 @@ init bag =
 take : Int -> Rack -> (Maybe (Int, Tile), Rack)
 take index (R mode cells) =
   case Array.get index cells of
-    Nothing    -> (Nothing, R mode cells)
-    Just Empty -> (Nothing, R mode cells)
-    Just (Occupied chosen tile) ->
-      case chosen of
-        True ->
-          (Nothing, R mode cells)
-        False ->
-          (Just (index, tile), R mode (Array.set index (Occupied True tile) cells))
+    Just (Occupied False tile) ->
+      (Just (index, tile), R mode (Array.set index (Occupied True tile) cells))
+    _ ->
+      (Nothing, R mode cells)
 
 return : Int -> Rack -> Rack
 return index (R mode cells) =
   case Array.get index cells of
-    Nothing    -> R mode cells
-    Just Empty -> R mode cells
-    Just (Occupied chosen tile) ->
-      case chosen of
-        True ->
-          R mode (Array.set index (Occupied False tile) cells)
-        False ->
-          R mode cells
+    Just (Occupied True tile) ->
+      let
+        newTile =
+          if Tile.isBlank tile then
+            Tile.blank
+          else
+            tile
+      in
+        R mode (Array.set index (Occupied False newTile) cells)
+    _ ->
+      R mode cells
+
+updateBlank : Int -> Maybe Char -> Rack -> Rack
+updateBlank index mc (R mode cells) =
+  case Array.get index cells of
+    Just (Occupied True tile) ->
+      if Tile.isBlank tile then
+        let
+          updatedTile = Tile.blankFrom mc
+        in
+          R mode (Array.set index (Occupied True updatedTile) cells)
+      else
+        R mode cells
+    _ ->
+      R mode cells
 
 chooseToExchange : Int -> Rack -> Rack
 chooseToExchange index (R mode cells) =
   case Array.get index cells of
-    Nothing    ->
-      R mode cells
-    Just Empty ->
-      R mode cells
     Just (Occupied chosen tile) ->
       let
         newCells =
@@ -148,6 +169,8 @@ chooseToExchange index (R mode cells) =
             Place
       in
         R newMode newCells
+    _ ->
+      R mode cells
 
 replenish : List Tile -> Rack -> (Rack, List Tile)
 replenish bag (R _ cells) =
@@ -211,20 +234,24 @@ viewCell handlers cell =
       (attr ++ handlers)
       html
 
-view : Events msg -> Rack -> Html msg
-view { placeEv, exchangeEv } (R mode cells) =
+view : Maybe (Events msg) -> Rack -> Html msg
+view maybeEvs (R mode cells) =
   let
     handlers i =
-      case mode of
-        Place ->
-          if anyChosen cells then
-            [ onClick (placeEv i) ]
-          else
-            [ onClick (placeEv i)
-            , onRightClick (exchangeEv i)
-            ]
-        Exchange ->
-          [ onRightClick (exchangeEv i) ]
+      case maybeEvs of
+        Nothing ->
+          []
+        Just { placeEv, exchangeEv } ->
+          case mode of
+            Place ->
+              if anyChosen cells then
+                [ onClick (placeEv i) ]
+              else
+                [ onClick (placeEv i)
+                , onRightClick (exchangeEv i)
+                ]
+            Exchange ->
+              [ onRightClick (exchangeEv i) ]
 
     modeStr =
       case mode of
@@ -234,7 +261,7 @@ view { placeEv, exchangeEv } (R mode cells) =
           "exchange"
   in
     Html.div
-    [ class "rack", class modeStr ]
+    [ id "rack", class "no-select", class modeStr ]
     (cells
       |> Array.indexedMap (viewCell << handlers)
       |> Array.toList)

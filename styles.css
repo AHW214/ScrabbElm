@@ -7,20 +7,26 @@ body {
 }
 
 #score {
-  position: absolute;
-  right: 20%;
   color: #FFFFFF;
-  font-size: 100px;
+  font-size: 40px;
+  margin-bottom: 50px;
 }
 
 .centered {
   position: absolute;
   left: 50%;
-  transform: translate(-50%, 25%);
+  transform: translate(-50%, 10%);
   text-align: center;
 }
 
-.rack {
+.no-select {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+#rack {
   display: grid;
   grid-template-columns: repeat(7, auto);
   background-color: #23272A;
@@ -29,7 +35,7 @@ body {
   margin: 50px auto;
 }
 
-.rack > .empty {
+#rack > .empty {
   background-color: #FFFFFF;
 }
 
@@ -40,11 +46,11 @@ body {
   height: 100%;
 }
 
-.rack.place > .chosen > .tile, .pending > .tile {
+#rack.place > .chosen > .tile, .pending > .tile {
   opacity: 0.5;
 }
 
-.rack.exchange > .chosen > .tile {
+#rack.exchange > .chosen > .tile {
   background-color: #FF0000;
 }
 
@@ -59,14 +65,14 @@ body {
   font-size: 16px;
 }
 
-.board {
+#board {
   display: grid;
   grid-template-columns: repeat(15, auto);
   background-color: #23272A;
   padding: 10px;
 }
 
-.board > div, .rack > div {
+#board > div, #rack > div {
   border: 1px solid #23272A;
   font-size: 21px;
   text-align: center;
@@ -74,26 +80,53 @@ body {
   height: 50px;
 }
 
-.board > .hover:hover {
+#board > .hover:hover {
   background-color: #FF0000;
 }
 
-.board > .empty {
+#board > .empty {
   background-color: #FFFFFF;
 }
 
-.board > .premium-letter-2 {
+#board > .premium-letter-2 {
   background-color: #7289DA;
 }
 
-.board > .premium-letter-3 {
+#board > .premium-letter-3 {
   background-color: rgb(46, 83, 216);
 }
 
-.board > .premium-word-2 {
+#board > .premium-word-2 {
   background-color: rgb(209, 114, 218);
 }
 
-.board > .premium-word-3 {
+#board > .premium-word-3 {
   background-color: rgb(211, 58, 78);
+}
+
+#lobby {
+  color: #FFFFFF;
+  font-size: 50px;
+}
+
+#noConnection {
+  color: rgb(211, 58, 78);
+  font-size: 50px;
+}
+
+#resultScreen {
+  color: #FFFFFF;
+  font-size: 50px;
+}
+
+button {
+  width: auto;
+  height: 25px;
+  padding-right: 10px;
+  border: none;
+  color: #000000;
+  background-color: #FFFFFF;
+  text-align: center;
+  text-decoration: none;
+  font-size: 16px;
 }

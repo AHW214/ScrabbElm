@@ -8,6 +8,7 @@ module Multiplayer exposing
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 
+import Player exposing (Player)
 import Tile exposing (Tile)
 import Board
 
@@ -60,11 +61,13 @@ placedDecoder =
       (Decode.field "tile" Tile.decoder)
 
 type Event
-  = StartGame Bag
+  = PlayerJoined Player
+  | PlayerLeft Player
+  | StartGame Bag
   | Passed
   | Exchanged Bag
-  | Placed Bag Placed Bool
-  | EndGame
+  | Placed Bag Placed Int
+  | EndGame Int
 
 eventDecoder : Decoder Event
 eventDecoder =
@@ -72,6 +75,14 @@ eventDecoder =
     |> Decode.andThen
       (\event ->
         case event of
+          "playerJoined" ->
+            Decode.map PlayerJoined
+              (Decode.at [ "data", "player" ] Player.decoder)
+
+          "playerLeft" ->
+            Decode.map PlayerLeft
+              (Decode.at [ "data", "player" ] Player.decoder)
+
           "startGame" ->
             Decode.map StartGame
               (Decode.at [ "data", "bag" ] bagDecoder)
@@ -84,13 +95,14 @@ eventDecoder =
             Decode.map3 Placed
               (Decode.at [ "data", "bag" ] bagDecoder)
               (Decode.at [ "data", "placed" ] placedDecoder)
-              (Decode.at [ "data", "boardEmpty" ] Decode.bool)
+              (Decode.at [ "data", "score" ] Decode.int)
 
           "passed" ->
             Decode.succeed Passed
 
           "endGame" ->
-            Decode.succeed EndGame
+            Decode.map EndGame
+              (Decode.at [ "data", "score" ] Decode.int)
 
           _ ->
             Decode.fail "Unknown server event: "
@@ -110,13 +122,13 @@ exchangeEncoder bag =
       [ ( "bag", bagEncoder bag ) ]
     )
 
-placeEncoder : Bag -> Placed -> Bool -> Value
-placeEncoder bag placed boardEmpty =
+placeEncoder : Bag -> Placed -> Int -> Value
+placeEncoder bag placed score =
   eventEncoder "placed"
     (Encode.object
       [ ( "bag", bagEncoder bag )
       , ( "placed", placedEncoder placed )
-      , ( "boardEmpty", Encode.bool boardEmpty )
+      , ( "score", Encode.int score )
       ]
     )
 
@@ -124,9 +136,12 @@ passEncoder : Value
 passEncoder =
   eventEncoder "passed" Encode.null
 
-endGameEncoder : Value
-endGameEncoder =
-  eventEncoder "endGame" Encode.null
+endGameEncoder : Int -> Value
+endGameEncoder score =
+  eventEncoder "endGame"
+    (Encode.object
+      [ ( "score", Encode.int score ) ]
+    )
 
 startGameEncoder : Value
 startGameEncoder =
