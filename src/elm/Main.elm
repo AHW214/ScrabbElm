@@ -644,6 +644,7 @@ viewGameOver { myScore, opponent } =
       [ Html.div
           [ id "resultScreen", class "centered" ]
           [ Html.text resultText
+          , Html.br [] []
           , Html.button buttonAttr buttonHtml
           ]
       ]
