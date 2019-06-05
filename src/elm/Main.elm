@@ -164,7 +164,6 @@ update msg model =
                 Multiplayer.PlayerLeft player ->
                   { model
                     | state = GameOver
-                    , myTurn = False
                     , opponent = Nothing
                   }
 
@@ -427,6 +426,7 @@ update msg model =
     ReturnToLobby ->
       ( { model
           | state = Lobby
+          , myTurn = False
           , myScore = 0
           , opponent = Nothing
         }
