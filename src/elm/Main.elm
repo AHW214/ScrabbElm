@@ -19,6 +19,7 @@ import Multiplayer exposing (eventDecoder)
 import Board exposing (Board)
 import Rack exposing (Rack)
 import Tile exposing (Tile)
+import Player exposing (Player)
 
 
 -- Program
@@ -62,6 +63,7 @@ type alias Model =
   , theirScore : Int
   , boardEmpty : Bool
   , myTurn : Bool
+  , opponent : Maybe Player
   }
 
 init : Flags -> ( Model, Cmd Msg )
@@ -78,6 +80,7 @@ init () = ( { socketInfo = Unopened
             , theirScore = 0
             , boardEmpty = True
             , myTurn = False
+            , opponent = Nothing
             }
           , Cmd.batch
               [ Http.get
@@ -152,6 +155,11 @@ update msg model =
 
             Ok event ->
               case event of
+                Multiplayer.PlayerJoined player ->
+                  { model
+                    | opponent = Just player
+                  }
+
                 Multiplayer.StartGame bag ->
                   let
                     (newRack, newBag) = Rack.init bag
@@ -417,11 +425,8 @@ getConnectionInfo socketInfo =
 subscriptions : Model -> Sub Msg
 subscriptions model =
   let
-    settingBlank =
-        Maybe.withDefault False <| Maybe.map (Tile.isBlank << Tuple.second) model.held
-
     blankSubs =
-      if settingBlank then
+      if isSettingBlank model.held then
         [ Browser.Events.onKeyDown <| Decode.map SetBlank keyDecoder ]
       else
         []
@@ -468,10 +473,14 @@ toLetter str =
 -- View
 
 viewTurn : Model -> Html Msg
-viewTurn { rack, bag, turnScore } =
+viewTurn { rack, held, bag, turnScore, myTurn } =
   let
     (attr, html) =
-      if Rack.exchanging rack then
+      if not myTurn then
+        ([], [ Html.text "Opponent's turn..." ])
+      else if isSettingBlank held then
+        ([], [ Html.text "Choose a letter" ])
+      else if Rack.exchanging rack then
         if List.length bag < Rack.size then
           ([], [ Html.text "Not enough tiles..." ])
         else
@@ -503,13 +512,10 @@ viewGame model =
     defaultRackEvs =
       { placeEv = ChoseRackPlace, exchangeEv = ChoseRackExchange }
 
-    settingBlank =
-      Maybe.withDefault False <| Maybe.map (Tile.isBlank << Tuple.second) model.held
-
     ( boardEv, rackEvs ) =
       if not model.myTurn then
         ( Nothing, Nothing )
-      else if settingBlank then
+      else if isSettingBlank model.held then
         ( Nothing, Just defaultRackEvs )
       else
         ( Just ClickedBoard, Just defaultRackEvs )
@@ -526,15 +532,24 @@ viewGame model =
       ]
 
 viewLobby : Model -> Html Msg
-viewLobby model =
-  Html.div
-    [ id "wrapper" ]
-    [ Html.div
-        [ class "centered" ]
-        [ Html.text "Lobby"
-        , Html.button [ onClick StartGame ] [ Html.text "Start Game" ]
-        ]
-    ]
+viewLobby { opponent } =
+  let
+    html =
+      case opponent of
+        Nothing ->
+          Html.text "Waiting for opponent..."
+        _ ->
+          Html.button [ onClick StartGame ] [ Html.text "Start Game" ]
+  in
+    Html.div
+      [ id "wrapper" ]
+      [ Html.div
+          [ id "lobby", class "centered" ]
+          [ Html.text "Lobby"
+          , Html.br [] []
+          , html
+          ]
+      ]
 
 viewGameOver : Model -> Html Msg
 viewGameOver model =
@@ -569,3 +584,7 @@ view model =
           viewNoConnection model
       ]
   }
+
+isSettingBlank : Maybe (Int, Tile) -> Bool
+isSettingBlank =
+  Maybe.withDefault False << Maybe.map (Tile.isBlank << Tuple.second)

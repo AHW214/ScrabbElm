@@ -8,6 +8,7 @@ module Multiplayer exposing
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 
+import Player exposing (Player)
 import Tile exposing (Tile)
 import Board
 
@@ -60,7 +61,8 @@ placedDecoder =
       (Decode.field "tile" Tile.decoder)
 
 type Event
-  = StartGame Bag
+  = PlayerJoined Player
+  | StartGame Bag
   | Passed
   | Exchanged Bag
   | Placed Bag Placed Bool
@@ -72,6 +74,10 @@ eventDecoder =
     |> Decode.andThen
       (\event ->
         case event of
+          "playerJoined" ->
+            Decode.map PlayerJoined
+              (Decode.at [ "data", "player" ] Player.decoder)
+
           "startGame" ->
             Decode.map StartGame
               (Decode.at [ "data", "bag" ] bagDecoder)
