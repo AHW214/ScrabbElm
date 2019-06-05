@@ -208,13 +208,13 @@ viewPremium attrs mult =
 viewPending : List (Html.Attribute msg) -> Tile -> Properties msg
 viewPending attrs tile =
     ( class "pending" :: attrs
-    , [ Tile.view tile ]
+    , [ Tile.view Nothing tile ]
     )
 
 viewPlaced : Tile -> Properties msg
 viewPlaced tile =
     ( []
-    , [ Tile.view tile ]
+    , [ Tile.view Nothing tile ]
     )
 
 viewCell : List (Attribute msg) -> Cell -> Html msg

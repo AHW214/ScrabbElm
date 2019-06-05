@@ -1,21 +1,22 @@
 module Tile exposing
-  ( Tile, blank, letter
-  , isBlank, score, char
-  , string, exchange
-  , encoder, decoder
-  , view
+  ( Tile, Event, blank, blankFrom, letter
+  , isBlank, score, char, string, exchange
+  , encoder, decoder, view
   )
 
 import Random.List
 import Random exposing (Generator)
 import Html exposing (Html, Attribute)
-import Html.Events exposing (onClick)
-import Html.Attributes exposing (class)
+import Html.Events exposing (on, onClick, keyCode)
+import Html.Attributes exposing (class, type_)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 
+type alias Event msg
+  = Maybe Char -> msg
+
 type Tile
-  = Blank
+  = Blank (Maybe Char)
   | Letter Char Int
 
 points : List (Int, List Char)
@@ -56,15 +57,21 @@ value =
     check pointsLower
 
 blank : Tile
-blank = Blank
+blank =
+  Blank Nothing
+
+blankFrom : Maybe Char -> Tile
+blankFrom mc =
+  Blank mc
 
 letter : Char -> Tile
-letter c = Letter c (value c)
+letter c =
+  Letter c (value c)
 
 isBlank : Tile -> Bool
 isBlank tile =
   case tile of
-    Blank ->
+    Blank _ ->
       True
     _ ->
       False
@@ -72,15 +79,15 @@ isBlank tile =
 score : Tile -> Int
 score tile =
   case tile of
-    Blank      -> 0
     Letter _ v -> v
+    _          -> 0
 
 char : Tile -> Char
 char tile =
   case tile of
   Letter c _ ->
     c
-  Blank ->
+  _ ->
     Debug.todo "Tile.char: Impossible"
 
 string : Tile -> String
@@ -124,7 +131,7 @@ decoder =
     |> Decode.andThen (\val -> Decode.succeed <|
         case Char.fromCode code of
           ' ' ->
-            Blank
+            Blank Nothing
           c ->
             Letter c val
     ))
@@ -133,23 +140,33 @@ encoder : Tile -> Value
 encoder tile =
   Encode.list Encode.int <|
     case tile of
-      Blank ->
+      Blank _ ->
         [ Char.toCode ' ', 0 ]
       Letter c v ->
         [ Char.toCode c, v ]
 
-
-view : Tile -> Html msg
-view tile =
+view : Maybe (Event msg) -> Tile -> Html msg
+view maybeEv tile =
   let
-    html =
+    (attrs, html) =
       case tile of
-        Blank -> []
-        Letter c i ->
-          [ Html.div [ class "letter" ] [ Html.text (String.fromChar c) ]
-          , Html.div [ class "points" ] [ Html.text (String.fromInt i) ]
-          ]
-  in
-    Html.div
-      [ class "tile" ]
-      html
+        Letter c v ->
+            ( []
+            , [ Html.div [ class "letter" ] [ Html.text (String.fromChar c) ]
+              , Html.div [ class "points" ] [ Html.text (String.fromInt v) ]
+              ]
+            )
+        Blank maybeChar ->
+          case maybeChar of
+            Nothing ->
+              ( []
+              , []
+              )
+            Just c ->
+              ( []
+              , [ Html.text (String.fromChar c) ]
+              )
+    in
+      Html.div
+        (class "tile" :: attrs)
+        html

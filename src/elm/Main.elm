@@ -60,7 +60,6 @@ type alias Model =
   , turnScore : Maybe Int
   , totalScore : Int
   , boardEmpty : Bool
-  , settingBlank : Bool
   , myTurn : Bool
   }
 
@@ -76,7 +75,6 @@ init () = ( { socketInfo = Unopened
             , turnScore = Just 0
             , totalScore = 0
             , boardEmpty = True
-            , settingBlank = False
             , myTurn = False
             }
           , Cmd.batch
@@ -104,7 +102,7 @@ type Msg
   | ChoseRackPlace Int
   | ChoseRackExchange Int
   | ClickedBoard Int Int
-  | SetBlank Char
+  | SetBlank (Maybe Char)
   | EndExchange (Maybe (List Tile, List Tile))
   | StartExchange
   | PassTurn
@@ -222,18 +220,10 @@ update msg model =
                 model.rack
                 |> Rack.return j
                 |> Rack.take i
-
-        settingBlank =
-          case taken of
-            Nothing ->
-              False
-            Just (_, tile) ->
-              Tile.isBlank tile
       in
         ( { model
             | held = taken
             , rack = newRack
-            , settingBlank = settingBlank
           }
         , Cmd.none
         )
@@ -277,13 +267,30 @@ update msg model =
         , Cmd.none
         )
 
-    SetBlank c ->
-      ( { model
-          | held = Maybe.map (Tuple.mapSecond (always (Tile.letter c))) model.held
-          , settingBlank = False
-        }
-      , Cmd.none
-      )
+    SetBlank mc ->
+      let
+        _ = Debug.log "meme" <| Debug.toString mc
+        (newHeld, newRack) =
+          case model.held of
+            Just (index, tile) ->
+              case mc of
+                Just c ->
+                  ( Just (index, Tile.letter c)
+                  , Rack.updateBlank index mc model.rack
+                  )
+                Nothing ->
+                  ( model.held
+                  , model.rack
+                  )
+            _ ->
+              Debug.todo "SetBlank: impossible"
+      in
+        ( { model
+            | held = newHeld
+            , rack = newRack
+          }
+        , Cmd.none
+        )
 
     EndTurn ->
       let
@@ -408,25 +415,51 @@ getConnectionInfo socketInfo =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-  WebSocket.events
-    (\event ->
-        case event of
-          WebSocket.Connected info ->
-            SocketConnect info
+  let
+    settingBlank =
+        Maybe.withDefault False <| Maybe.map (Tile.isBlank << Tuple.second) model.held
 
-          WebSocket.StringMessage info message ->
-            ReceivedString message
+    subs =
+      if settingBlank then
+        [ Browser.Events.onKeyDown <| Decode.map SetBlank keyDecoder ]
+      else
+        []
+  in
+    Sub.batch
+      ([ WebSocket.events
+          (\event ->
+              case event of
+                WebSocket.Connected info ->
+                  SocketConnect info
 
-          WebSocket.Closed _ unsentBytes ->
-            SocketClosed unsentBytes
+                WebSocket.StringMessage info message ->
+                  ReceivedString message
 
-          WebSocket.Error _ code ->
-            Error ("WebSocket Error: " ++ String.fromInt code)
+                WebSocket.Closed _ unsentBytes ->
+                  SocketClosed unsentBytes
 
-          WebSocket.BadMessage error ->
-            Error error
-    )
+                WebSocket.Error _ code ->
+                  Error ("WebSocket Error: " ++ String.fromInt code)
 
+                WebSocket.BadMessage error ->
+                  Error error
+          )
+      ] ++ subs)
+
+keyDecoder : Decode.Decoder (Maybe Char)
+keyDecoder =
+  Decode.map toLetter (Decode.field "key" Decode.string)
+
+toLetter : String -> Maybe Char
+toLetter str =
+  case String.uncons str of
+    Just (c, "") ->
+      if Char.isAlpha c then
+        Just (Char.toLower c)
+      else
+        Nothing
+    _ ->
+      Nothing
 
 -- View
 
@@ -461,10 +494,13 @@ viewGame model =
     defaultRackEvs =
       { placeEv = ChoseRackPlace, exchangeEv = ChoseRackExchange }
 
+    settingBlank =
+      Maybe.withDefault False <| Maybe.map (Tile.isBlank << Tuple.second) model.held
+
     ( boardEv, rackEvs ) =
       if not model.myTurn then
         ( Nothing, Nothing )
-      else if model.settingBlank then
+      else if settingBlank then
         ( Nothing, Just defaultRackEvs )
       else
         ( Just ClickedBoard, Just defaultRackEvs )
@@ -474,7 +510,7 @@ viewGame model =
       [ Html.div
           [ class "centered" ]
           [ Board.view boardEv model.held model.board
-          , Rack.view rackEvs model.rack
+          , Rack.view SetBlank rackEvs model.rack
           , viewTurn model
           ]
       , viewScore model.totalScore
