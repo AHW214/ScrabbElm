@@ -164,6 +164,7 @@ update msg model =
                 Multiplayer.PlayerLeft player ->
                   { model
                     | state = GameOver
+                    , myTurn = False
                     , opponent = Nothing
                   }
 
