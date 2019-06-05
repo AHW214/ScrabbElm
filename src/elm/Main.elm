@@ -58,7 +58,8 @@ type alias Model =
   , bag : List Tile
   , held : Maybe (Int, Tile)
   , turnScore : Maybe Int
-  , totalScore : Int
+  , myScore : Int
+  , theirScore : Int
   , boardEmpty : Bool
   , myTurn : Bool
   }
@@ -69,11 +70,12 @@ init () = ( { socketInfo = Unopened
             , dict = empty
             , board = Board.init
             , rack = Rack.empty
-            , bag = List.map Tile.letter (String.toList "historyhornfarmpastemobbitamsndlnfdsl")
+            , bag = []
             , held = Nothing
             --Changed from Nothing as that more accurately depicts a move without doing anything
             , turnScore = Just 0
-            , totalScore = 0
+            , myScore = 0
+            , theirScore = 0
             , boardEmpty = True
             , myTurn = False
             }
@@ -269,13 +271,12 @@ update msg model =
 
     SetBlank mc ->
       let
-        _ = Debug.log "meme" <| Debug.toString mc
         (newHeld, newRack) =
           case model.held of
             Just (index, tile) ->
               case mc of
                 Just c ->
-                  ( Just (index, Tile.letter c)
+                  ( Just (index, Tile.blankToLetter c)
                   , Rack.updateBlank index mc model.rack
                   )
                 Nothing ->
@@ -310,7 +311,7 @@ update msg model =
                 score
 
         newScore =
-          model.totalScore + turnScore
+          model.myScore + turnScore
 
         boardEmpty =
           if model.boardEmpty == False then
@@ -339,7 +340,7 @@ update msg model =
             , rack = newRack
             , bag = newBag
             , turnScore = Just 0
-            , totalScore = Debug.log "TOTAL SCORE" newScore
+            , myScore = Debug.log "TOTAL SCORE" newScore
             , boardEmpty = boardEmpty
           }
         , WebSocket.sendJsonString
@@ -419,32 +420,35 @@ subscriptions model =
     settingBlank =
         Maybe.withDefault False <| Maybe.map (Tile.isBlank << Tuple.second) model.held
 
-    subs =
+    blankSubs =
       if settingBlank then
         [ Browser.Events.onKeyDown <| Decode.map SetBlank keyDecoder ]
       else
         []
+
+    webSub =
+      WebSocket.events
+        (\event ->
+            case event of
+              WebSocket.Connected info ->
+                SocketConnect info
+
+              WebSocket.StringMessage info message ->
+                ReceivedString message
+
+              WebSocket.Closed _ unsentBytes ->
+                SocketClosed unsentBytes
+
+              WebSocket.Error _ code ->
+                Error ("WebSocket Error: " ++ String.fromInt code)
+
+              WebSocket.BadMessage error ->
+                Error error
+        )
+
   in
     Sub.batch
-      ([ WebSocket.events
-          (\event ->
-              case event of
-                WebSocket.Connected info ->
-                  SocketConnect info
-
-                WebSocket.StringMessage info message ->
-                  ReceivedString message
-
-                WebSocket.Closed _ unsentBytes ->
-                  SocketClosed unsentBytes
-
-                WebSocket.Error _ code ->
-                  Error ("WebSocket Error: " ++ String.fromInt code)
-
-                WebSocket.BadMessage error ->
-                  Error error
-          )
-      ] ++ subs)
+      (webSub :: blankSubs)
 
 keyDecoder : Decode.Decoder (Maybe Char)
 keyDecoder =
@@ -477,16 +481,21 @@ viewTurn { rack, bag, turnScore } =
           Nothing ->
             ([], [ Html.text "Finish your move..." ])
           Just score ->
-            if score > 0 then
+            if score > 0 || Rack.allChosenBlank rack then
               ([ onClick EndTurn ], [ Html.text "End turn." ])
             else
               ([ onClick PassTurn ], [ Html.text "Pass turn." ])
   in
     Html.button attr html
 
-viewScore : Int -> Html Msg
-viewScore s =
-  Html.div [ id "score" ] [ Html.text (String.fromInt s) ]
+viewScore : Int -> Int -> Html Msg
+viewScore myScore theirScore =
+  Html.div
+    [ id "score" ]
+    [ Html.text <| "My Score: " ++ (String.fromInt myScore)
+    , Html.br [] []
+    , Html.text <| "Their Score: " ++ (String.fromInt theirScore)
+    ]
 
 viewGame : Model -> Html Msg
 viewGame model =
@@ -509,11 +518,11 @@ viewGame model =
       [ id "wrapper" ]
       [ Html.div
           [ class "centered" ]
-          [ Board.view boardEv model.held model.board
-          , Rack.view SetBlank rackEvs model.rack
+          [ viewScore model.myScore model.theirScore
+          , Board.view boardEv model.held model.board
+          , Rack.view rackEvs model.rack
           , viewTurn model
           ]
-      , viewScore model.totalScore
       ]
 
 viewLobby : Model -> Html Msg

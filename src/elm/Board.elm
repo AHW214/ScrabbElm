@@ -9,7 +9,7 @@ module Board exposing
 import Dict exposing (Dict)
 import Html exposing (Html, Attribute)
 import Html.Events exposing (onClick)
-import Html.Attributes exposing (class)
+import Html.Attributes exposing (id, class)
 import RedBlackTree exposing (Tree)
 
 import Matrix exposing (Matrix)
@@ -208,13 +208,13 @@ viewPremium attrs mult =
 viewPending : List (Html.Attribute msg) -> Tile -> Properties msg
 viewPending attrs tile =
     ( class "pending" :: attrs
-    , [ Tile.view Nothing tile ]
+    , [ Tile.view tile ]
     )
 
 viewPlaced : Tile -> Properties msg
 viewPlaced tile =
     ( []
-    , [ Tile.view Nothing tile ]
+    , [ Tile.view tile ]
     )
 
 viewCell : List (Attribute msg) -> Cell -> Html msg
@@ -253,7 +253,7 @@ view maybeEv held (B pending matrix) =
           [ onClick (event i j) ]
   in
     Html.div
-      [ class "board" ]
+      [ id "board" ]
       (matrix
         |> Matrix.indexedMap (\i j -> viewCell (hover ++ handlers i j))
         |> Matrix.toLists

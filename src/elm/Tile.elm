@@ -1,7 +1,7 @@
 module Tile exposing
   ( Tile, Event, blank, blankFrom, letter
-  , isBlank, score, char, string, exchange
-  , encoder, decoder, view
+  , blankToLetter, isBlank, score, char, string
+  , exchange, encoder, decoder, view, numBlanks
   )
 
 import Random.List
@@ -18,6 +18,9 @@ type alias Event msg
 type Tile
   = Blank (Maybe Char)
   | Letter Char Int
+
+numBlanks : Int
+numBlanks = 2
 
 points : List (Int, List Char)
 points =
@@ -67,6 +70,10 @@ blankFrom mc =
 letter : Char -> Tile
 letter c =
   Letter c (value c)
+
+blankToLetter : Char -> Tile
+blankToLetter c =
+  Letter c 0
 
 isBlank : Tile -> Bool
 isBlank tile =
@@ -145,27 +152,24 @@ encoder tile =
       Letter c v ->
         [ Char.toCode c, v ]
 
-view : Maybe (Event msg) -> Tile -> Html msg
-view maybeEv tile =
+view : Tile -> Html msg
+view tile =
   let
+    viewLetter c v =
+      ( []
+      , [ Html.div [ class "letter" ] [ Html.text (String.fromChar c) ]
+        , Html.div [ class "points" ] [ Html.text (String.fromInt v) ]
+        ]
+      )
+
     (attrs, html) =
       case tile of
         Letter c v ->
-            ( []
-            , [ Html.div [ class "letter" ] [ Html.text (String.fromChar c) ]
-              , Html.div [ class "points" ] [ Html.text (String.fromInt v) ]
-              ]
-            )
-        Blank maybeChar ->
-          case maybeChar of
-            Nothing ->
-              ( []
-              , []
-              )
-            Just c ->
-              ( []
-              , [ Html.text (String.fromChar c) ]
-              )
+           viewLetter c v
+        Blank (Just c) ->
+          viewLetter c 0
+        _ ->
+          ( [], [] )
     in
       Html.div
         (class "tile" :: attrs)

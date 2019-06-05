@@ -6,12 +6,13 @@ module Rack exposing
   , exchange, exchanging
   , tilesToExchange, allEmpty
   , updateBlank, view
+  , allChosenBlank
   )
 
 import Array exposing (Array)
 import Html exposing (Html)
 import Html.Events exposing (onClick, preventDefaultOn)
-import Html.Attributes exposing (class)
+import Html.Attributes exposing (id, class)
 import Json.Decode as Decode
 
 import Tile exposing (Tile)
@@ -72,6 +73,20 @@ anyChosen cells =
       Array.foldl ((||) << f) False
   in
     anyArray isChosen cells
+
+allChosenBlank : Rack -> Bool
+allChosenBlank (R _ cells) =
+  let
+    blanks =
+      Array.filter (\c ->
+        case getChosenTile c of
+          Just tile ->
+            Tile.isBlank tile
+          _ ->
+            False
+      ) cells
+  in
+    Array.length blanks == Tile.numBlanks
 
 isEmpty : Cell -> Bool
 isEmpty cell =
@@ -198,8 +213,8 @@ tilesToExchange (R mode cells) =
         |> List.filterMap getChosenTile
 
 
-viewCell : Tile.Event msg -> List (Html.Attribute msg) -> Cell -> Html msg
-viewCell blankEvent handlers cell =
+viewCell : List (Html.Attribute msg) -> Cell -> Html msg
+viewCell handlers cell =
   let
     (attr, html) =
       case cell of
@@ -212,15 +227,15 @@ viewCell blankEvent handlers cell =
               [ class "chosen" ]
             else
               []
-          , [ Tile.view (if chosen then Just blankEvent else Nothing) tile ]
+          , [ Tile.view tile ]
           )
   in
     Html.div
       (attr ++ handlers)
       html
 
-view : Tile.Event msg -> Maybe (Events msg) -> Rack -> Html msg
-view blankEvent maybeEvs (R mode cells) =
+view : Maybe (Events msg) -> Rack -> Html msg
+view maybeEvs (R mode cells) =
   let
     handlers i =
       case maybeEvs of
@@ -246,9 +261,9 @@ view blankEvent maybeEvs (R mode cells) =
           "exchange"
   in
     Html.div
-    [ class "rack", class modeStr ]
+    [ id "rack", class modeStr ]
     (cells
-      |> Array.indexedMap (viewCell blankEvent << handlers)
+      |> Array.indexedMap (viewCell << handlers)
       |> Array.toList)
 
 onRightClick : msg -> Html.Attribute msg
