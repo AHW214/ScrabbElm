@@ -597,8 +597,10 @@ viewGameOver { myScore, opponent } =
             startStr =
               if myScore > opp.score then
                 "Congratulations! You won "
-              else
+              else if opp.score > myScore then
                 "Darn, looks like you lost "
+              else
+                "Woah, you tied "
             in
               startStr ++ String.fromInt myScore ++ " to " ++ String.fromInt opp.score ++ "."
         Nothing ->
