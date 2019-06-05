@@ -345,7 +345,7 @@ update msg model =
         (newState, valueOut) =
           if Rack.allEmpty newRack then
             ( GameOver
-            , Multiplayer.endGameEncoder model.myScore
+            , Multiplayer.endGameEncoder newScore
             )
           else
             ( GameActive
