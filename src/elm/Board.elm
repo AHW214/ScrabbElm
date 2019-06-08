@@ -212,7 +212,7 @@ viewPremium attrs mult =
         Word n ->
           (String.fromInt n, "word", "x WS")
   in
-      ( class ("premium-" ++ kind ++ "-" ++ num) :: attrs
+      ( [ class "premium", class (kind ++ "-" ++ num) ] ++ attrs
       , [ Html.text (num ++ str) ]
       )
 

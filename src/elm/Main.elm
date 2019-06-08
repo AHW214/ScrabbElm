@@ -559,18 +559,28 @@ viewTurn { rack, held, bag, turnScore, myTurn, consecutivePasses } =
                 [ Html.text "Pass turn." ]
             ] ++ endGame
 
-viewScore : Int -> Int -> Html Msg
-viewScore myScore theirScore =
+viewTime : Int -> Html Msg
+viewTime time =
   Html.div
-    [ id "score" ]
-    [ Html.text <| "My Score: " ++ (String.fromInt myScore)
-    , Html.br [] []
-    , Html.text <| "Their Score: " ++ (String.fromInt theirScore)
+    [ class "time" ]
+    [ Html.text <| String.fromInt time ]
+
+viewGameInfo : Model -> Html Msg
+viewGameInfo { myScore, opponent } =
+  Html.div
+    [ id "info" ]
+    [ Player.view (Player "player 1" myScore)
+    , viewTime 0
+    , Maybe.withDefault (Html.text "oop") <| Maybe.map Player.view opponent
+    , viewTime 0
     ]
 
 viewGame : Model -> Html Msg
 viewGame model =
   let
+    theirScore =
+      Maybe.withDefault 0 <| Maybe.map .score model.opponent
+
     defaultRackEvs =
       { placeEv = ChoseRackPlace, exchangeEv = ChoseRackExchange }
 
@@ -586,8 +596,13 @@ viewGame model =
       [ id "wrapper" ]
       [ Html.div
           [ class "centered" ]
-          ([ viewScore model.myScore <| Maybe.withDefault 0 <| Maybe.map (.score) model.opponent
-          , Board.view boardEv model.held model.board
+          ([ Html.div
+              [ Html.Attributes.style "display" "flex" ]
+              [ Board.view boardEv model.held model.board
+              , Html.div
+                [ class "sidebar" ]
+                [ viewGameInfo model ]
+              ]
           , Rack.view rackEvs model.rack
           ] ++ viewTurn model)
       ]
