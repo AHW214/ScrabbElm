@@ -1,13 +1,22 @@
-module Rack exposing
-  ( Rack, size
-  , empty, init
-  , take, chooseToExchange
-  , return, replenish
-  , exchange, exchanging
-  , tilesToExchange, allEmpty
-  , updateBlank, view
-  , allChosenBlank
-  )
+module Rack
+  exposing
+    ( Rack
+    , Events
+    , size
+    , empty
+    , init
+    , take
+    , chooseToExchange
+    , return
+    , replenish
+    , exchange
+    , exchanging
+    , tilesToExchange
+    , allEmpty
+    , updateBlank
+    , view
+    , allChosenBlank
+    )
 
 import Array exposing (Array)
 import Html exposing (Html)

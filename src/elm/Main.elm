@@ -1,694 +1,141 @@
-module Main exposing (..)
+module Main
+  exposing
+    (..)
 
--- Imports
+
+-- imports
 
 import Browser
-import Browser.Events
 import Html exposing (Html)
-import Html.Events exposing (onClick)
-import Html.Attributes exposing (id, class)
 import Http
-import Random exposing (Generator)
-import Random.List
-import Json.Decode as Decode
-import Json.Encode as Encode
 
-import RedBlackTree exposing (Tree, empty, insert, member)
+import RedBlackTree as RBT exposing (Tree)
 import WebSocket exposing (ConnectionInfo, Ticket)
-import Multiplayer exposing (eventDecoder)
-import Board exposing (Board)
-import Rack exposing (Rack)
-import Tile exposing (Tile)
-import Player exposing (Player)
+
+import Page.Connecting as Connecting
+import Page.Disconnected as Disconnected
+import Page.Game as Game
+import Page.Lobby as Lobby
 
 
--- Program
+-- program
 
 type alias Flags = ()
 
 main : Program Flags Model Msg
 main =
-  Browser.document
+  Browser.application
     { init = init
     , view = view
     , update = update
     , subscriptions = subscriptions
+    , onUrlChange = UrlChanged
+    , onUrlRequest = LinkClicked
     }
 
 
--- Model
+-- model
+
+type alias Model =
+  { socketInfo : SocketStatus
+  , dict : Tree String
+  , page : Page
+  }
+
+type Page
+  = Connecting Connecting.Model
+  | Disconnected Disconnected.Model
+  | Lobby Lobby.Model
+  | Game Game.Model
+
 
 type SocketStatus
   = Unopened
-  | Requested Ticket
   | Connected ConnectionInfo
-  | Closed Int (Maybe String)
+  | Closed (Maybe String)
 
-type State
-  = Lobby
-  | GameActive
-  | GameOver
-  | NoConnection String
-
-type alias Model =
-  { socketInfo: SocketStatus
-  , state : State
-  , dict : Tree String
-  , board : Board
-  , rack : Rack
-  , bag : List Tile
-  , held : Maybe (Int, Tile)
-  , turnScore : Maybe Int
-  , myScore : Int
-  , myTurn : Bool
-  , opponent : Maybe Player
-  , consecutivePasses : Int
-  }
-
-initModel : Model
-initModel =
-  { socketInfo = Unopened
-  , state = Lobby
-  , dict = empty
-  , board = Board.init
-  , rack = Rack.empty
-  , bag = []
-  , held = Nothing
-  , turnScore = Just 0
-  , myScore = 0
-  , myTurn = False
-  , opponent = Nothing
-  , consecutivePasses = 0
-  }
 
 init : Flags -> ( Model, Cmd Msg )
-init () = ( initModel
-          , Cmd.batch
-              [ Http.get
-                  { url = "https://raw.githubusercontent.com/AHW214/ScrabbElm/master/assets/dictionary.txt"
-                  , expect = Http.expectString GotDict
-                  }
-              , Http.get
-                  { url = ("http://" ++ Multiplayer.serverIP)
-                  , expect = Http.expectString GotTicket
-                  }
-              ]
-          )
+init () =
+  ( { socketInfo = Unopened
+    , dict = RBT.empty
+    , page = Connecting Connecting.init
+    }
+  , Cmd.batch
+      [ Http.get
+          { url = "https://raw.githubusercontent.com/AHW214/ScrabbElm/master/assets/dictionary.txt"
+          , expect = Http.expectString GotDict
+          }
+      , Http.get
+          { url = ("http://" ++ Multiplayer.serverIP)
+          , expect = Http.expectString GotTicket
+          }
+      ]
+  )
 
 
--- Update
+-- update
 
 type Msg
   = SocketConnect ConnectionInfo
-  | SocketClosed Int (Maybe String)
+  | SocketClosed (Maybe String)
   | ReceivedString String
-  | Error String
-  | GotTicket (Result Http.Error String)
-  | GotDict (Result Http.Error String)
-  | ChoseRackPlace Int
-  | ChoseRackExchange Int
-  | ClickedBoard Int Int
-  | SetBlank (Maybe Char)
-  | EndExchange (Maybe (List Tile, List Tile))
-  | StartExchange
-  | PassTurn
-  | EndTurn
-  | StartGame
-  | EndGame
-  | ReturnToLobby
+  | SocketError String
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-  case msg of
-    GotTicket result ->
-      let
-        newModel =
-          case result of
-            Ok ticket ->
-              { model | socketInfo = Requested ticket }
-            Err _ ->
-              { model | state = NoConnection "Failed to receive ticket from server" }
-      in
-        ( newModel
-        , WebSocket.connect ("ws://" ++ Multiplayer.serverIP) []
-        )
-
-    SocketConnect info ->
-      ( { model | socketInfo = Connected info }
-      , WebSocket.sendString info (getConnectionTicket model.socketInfo)
-      )
-
-    SocketClosed code reason ->
+  case ( msg, model ) of
+    ( SocketClosed reason, _ ) ->
       ( { model
-          | socketInfo = Closed code reason
-          , state = NoConnection (Maybe.withDefault "No connection to server..." reason)
+          | socketInfo = Closed reason
+          , page = Disconnected Disconnected.init
         }
       , Cmd.none
       )
 
-    ReceivedString eventObject ->
+    ( SocketError errMsg, _ ) ->
+      let
+        _ = Debug.log "websocket error: " errMsg
+      in
+        ( model
+        , Cmd.none
+        )
+
+    ( SocketConnect info, Connecting _ ) ->
+      ( { model | socketInfo = Connected info }
+      , WebSocket.sendString info model.room.id
+      )
+
+    ( ReceivedString stringified, _ ) ->
       let
         newModel =
-          case Decode.decodeString Multiplayer.eventDecoder eventObject of
+          case Decode.decodeString Multiplayer.eventDecoder stringified of
             Err errMsg ->
               let
-                _ = Debug.log "Multiplayer Error" errMsg
+                _ = Debug.log "multiplayer decode error: " errMsg
               in
                 model
 
             Ok event ->
-              case event of
-                Multiplayer.PlayerJoined player ->
-                  { model | opponent = Just player }
-
-                Multiplayer.PlayerLeft player ->
-                  { model
-                    | state = GameOver
-                    , opponent = Nothing
-                  }
-
-                Multiplayer.StartGame bag ->
-                  let
-                    (newRack, newBag) = Rack.init bag
-                  in
-                    { model
-                      | state = GameActive
-                      , board = Board.init
-                      , rack = newRack
-                      , bag = newBag
-                      , held = Nothing
-                      , turnScore = Just 0
-                      , myScore = 0
-                      , opponent = Maybe.map (Player.setScore 0) model.opponent
-                      , consecutivePasses = 0
-                    }
-
-                Multiplayer.Exchanged newBag ->
-                  { model
-                    | myTurn = True
-                    , bag = newBag
-                    , consecutivePasses = model.consecutivePasses + 1
-                  }
-
-                Multiplayer.Placed newBag placed theirScore ->
-                  { model
-                    | myTurn = True
-                    , bag = newBag
-                    , board = Board.placeAtIndices placed model.board
-                    , opponent = Maybe.map (Player.setScore theirScore) model.opponent
-                    , consecutivePasses = 0
-                  }
-
-                Multiplayer.Passed ->
-                  { model
-                    | myTurn = True
-                    , consecutivePasses = model.consecutivePasses + 1 }
-
-                Multiplayer.EndGame theirScore ->
-                  { model
-                    | state = GameOver
-                    , myTurn = False
-                    , opponent = Maybe.map (Player.setScore theirScore) model.opponent
-                  }
+              handleMultiplayer event
       in
         ( newModel
         , Cmd.none
         )
 
-    Error errMsg ->
-      let
-        _ = Debug.log "Error" errMsg
-      in
-      ( model
-      , Cmd.none
-      )
-
-    GotDict result ->
-      let
-        newModel =
-          case result of
-            Ok text ->
-              { model | dict = loadDictionary text }
-            Err _ ->
-              model
-      in
-        ( newModel
-        , Cmd.none
-        )
-
-    ChoseRackPlace i ->
-      let
-        (taken, newRack) =
-          case model.held of
-            Nothing ->
-              Rack.take i model.rack
-            Just (j, _) ->
-              if j == i then
-                ( Nothing
-                , Rack.return i model.rack
-                )
-              else
-                model.rack
-                |> Rack.return j
-                |> Rack.take i
-      in
-        ( { model
-            | held = taken
-            , rack = newRack
-          }
-        , Cmd.none
-        )
-
-    ChoseRackExchange i ->
-      let
-        newRack =
-          Rack.chooseToExchange i model.rack
-      in
-        ( { model | rack = newRack }
-        , Cmd.none
-        )
-
-    ClickedBoard i j ->
-      let
-        (newBoard, maybeRet) =
-          Board.set i j model.held model.board
-
-        validator =
-          if Board.isEmpty model.board then
-            Board.pendingTilesCheckFirstTurn
-          else
-            Board.pendingTilesWordCheck
-
-        newTurnScore =
-          Debug.log "SCORE" <| validator model.dict newBoard
-
-        newRack =
-          case maybeRet of
-            Nothing ->
-              model.rack
-            Just index ->
-              Rack.return index model.rack
-      in
-        ( { model
-            | board = newBoard
-            , held = Nothing
-            , rack = newRack
-            , turnScore = newTurnScore
-          }
-        , Cmd.none
-        )
-
-    SetBlank mc ->
-      let
-        (newHeld, newRack) =
-          case model.held of
-            Just (index, tile) ->
-              case mc of
-                Just c ->
-                  ( Just (index, Tile.blankToLetter c)
-                  , Rack.updateBlank index mc model.rack
-                  )
-                Nothing ->
-                  ( model.held
-                  , model.rack
-                  )
-            _ ->
-              Debug.todo "SetBlank: impossible"
-      in
-        ( { model
-            | held = newHeld
-            , rack = newRack
-          }
-        , Cmd.none
-        )
-
-    EndTurn ->
-      let
-        (newRack, newBag) =
-          Rack.replenish model.bag model.rack
-
-        (newBoard, placed) =
-          Board.placePending model.board
-
-        turnScore =
-          case model.turnScore of
-            Nothing -> 0
-            Just score ->
-              if List.length placed == Rack.size then
-                score + 50
-              else
-                score
-
-        newScore =
-          model.myScore + turnScore
-
-        (newState, valueOut) =
-          if Rack.allEmpty newRack then
-            ( GameOver
-            , Multiplayer.endGameEncoder newScore
-            )
-          else
-            ( GameActive
-            , Multiplayer.placeEncoder newBag placed newScore
-            )
-      in
-        ( { model
-            | state = newState
-            , myTurn = False
-            , board = newBoard
-            , rack = newRack
-            , bag = newBag
-            , turnScore = Just 0
-            , myScore = Debug.log "TOTAL SCORE" newScore
-            , consecutivePasses = 0
-          }
-        , WebSocket.sendJsonString
-            (getConnectionInfo model.socketInfo)
-            (valueOut)
-        )
-
-    StartExchange ->
-      let
-        tiles =
-          Rack.tilesToExchange model.rack
-      in
-        ( model
-        , Random.generate
-            EndExchange (Tile.exchange tiles model.bag)
-        )
-
-    EndExchange result ->
-      let
-        newModel =
-          case result of
-            Nothing ->
-              model
-            Just (exTiles, exBag) ->
-              { model
-                  | myTurn = False
-                  , rack = Rack.exchange exTiles model.rack
-                  , bag = exBag
-                  , consecutivePasses = model.consecutivePasses + 1
-              }
-      in
-        ( newModel
-        , WebSocket.sendJsonString
-            (getConnectionInfo model.socketInfo)
-            (Multiplayer.exchangeEncoder newModel.bag)
-        )
-
-    PassTurn ->
-      ( { model
-        | myTurn = False
-        , consecutivePasses = model.consecutivePasses + 1
-        }
-      , WebSocket.sendJsonString
-          (getConnectionInfo model.socketInfo)
-          (Multiplayer.passEncoder)
-      )
-
-    StartGame ->
-      ( { model | myTurn = True }
-      , WebSocket.sendJsonString
-          (getConnectionInfo model.socketInfo)
-          (Multiplayer.startGameEncoder)
-      )
-
-    EndGame ->
-      ( { model
-          | state = GameOver
-          , myTurn = False
-        }
-      , WebSocket.sendJsonString
-          (getConnectionInfo model.socketInfo)
-          (Multiplayer.endGameEncoder model.myScore)
-      )
-
-    ReturnToLobby ->
-      ( { model
-          | state = Lobby
-          , myTurn = False
-          , myScore = 0
-          , opponent = Nothing
-        }
-      , Cmd.none
-      )
+    
 
 
-loadDictionary : String -> Tree String
-loadDictionary = RedBlackTree.fromList << String.words
-
-getConnectionTicket : SocketStatus -> Ticket
-getConnectionTicket socketInfo =
-  case socketInfo of
-    Requested ticket ->
-      ticket
-    _ ->
-      Debug.todo "Not connected to server."
-
-getConnectionInfo : SocketStatus -> ConnectionInfo
-getConnectionInfo socketInfo =
-  case socketInfo of
-    Connected info ->
-      info
-    _ ->
-      Debug.todo "Not connected to server."
-
-
--- Subscriptions
+-- subscriptions
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-  let
-    blankSubs =
-      if isSettingBlank model.held then
-        [ Browser.Events.onKeyDown <| Decode.map SetBlank keyDecoder ]
-      else
-        []
+  case model of
+    Lobby lobby ->
+      Sub.map LobbyMsg (Lobby.subscriptions lobby)
 
-    webSub =
-      WebSocket.events
-        (\event ->
-            case event of
-              WebSocket.Connected info ->
-                SocketConnect info
+    Game game ->
+      Sub.map GameMsg (Game.subscriptions game)
 
-              WebSocket.StringMessage info message ->
-                ReceivedString message
-
-              WebSocket.Closed _ unsentBytes reason ->
-                SocketClosed unsentBytes reason
-
-              WebSocket.Error _ ->
-                Error "WebSocket Error"
-
-              WebSocket.BadMessage error ->
-                Error error
-        )
-
-  in
-    Sub.batch
-      (webSub :: blankSubs)
-
-keyDecoder : Decode.Decoder (Maybe Char)
-keyDecoder =
-  Decode.map toLetter (Decode.field "key" Decode.string)
-
-toLetter : String -> Maybe Char
-toLetter str =
-  case String.uncons str of
-    Just (c, "") ->
-      if Char.isAlpha c then
-        Just (Char.toLower c)
-      else
-        Nothing
     _ ->
-      Nothing
-
--- View
-
-viewTurn : Model -> List (Html Msg)
-viewTurn { rack, held, bag, turnScore, myTurn, consecutivePasses } =
-  if not myTurn then
-    [ Html.button
-      []
-      [ Html.text "Opponent's turn..." ]
-    ]
-  else if isSettingBlank held then
-    [ Html.button
-        []
-        [ Html.text "Choose a letter" ]
-    ]
-  else if Rack.exchanging rack then
-    if List.length bag < Rack.size then
-      [ Html.button
-          []
-          [ Html.text "Not enough tiles..." ]
-      ]
-    else
-      [ Html.button
-          [ onClick StartExchange ]
-          [ Html.text "Exchange Tiles." ]
-      ]
-  else
-    case turnScore of
-      Nothing ->
-        [ Html.button
-            []
-            [ Html.text "Finish your move..." ]
-        ]
-      Just score ->
-        if score > 0 || Rack.allChosenBlank rack then
-          [ Html.button
-              [ onClick EndTurn ]
-              [ Html.text "End turn." ]
-          ]
-        else
-          let
-            endGame =
-              if consecutivePasses >= 6 then
-                [ Html.button
-                    [ onClick EndGame ]
-                    [ Html.text "End game?" ]
-                ]
-              else
-                []
-            in
-            [ Html.button
-                [ onClick PassTurn ]
-                [ Html.text "Pass turn." ]
-            ] ++ endGame
-
-viewTime : Int -> Html Msg
-viewTime time =
-  Html.div
-    [ class "time" ]
-    [ Html.text <| String.fromInt time ]
-
-viewGameInfo : Model -> Html Msg
-viewGameInfo { myScore, opponent } =
-  Html.div
-    [ id "info" ]
-    [ Player.view (Player "player 1" myScore)
-    , viewTime 0
-    , Maybe.withDefault (Html.text "oop") <| Maybe.map Player.view opponent
-    , viewTime 0
-    ]
-
-viewGame : Model -> Html Msg
-viewGame model =
-  let
-    theirScore =
-      Maybe.withDefault 0 <| Maybe.map .score model.opponent
-
-    defaultRackEvs =
-      { placeEv = ChoseRackPlace, exchangeEv = ChoseRackExchange }
-
-    ( boardEv, rackEvs ) =
-      if not model.myTurn then
-        ( Nothing, Nothing )
-      else if isSettingBlank model.held then
-        ( Nothing, Just defaultRackEvs )
-      else
-        ( Just ClickedBoard, Just defaultRackEvs )
-  in
-    Html.div
-      [ id "wrapper" ]
-      [ Html.div
-          [ class "centered" ]
-          ([ Html.div
-              [ Html.Attributes.style "display" "flex" ]
-              [ Board.view boardEv model.held model.board
-              , Html.div
-                [ class "sidebar" ]
-                [ viewGameInfo model ]
-              ]
-          , Rack.view rackEvs model.rack
-          ] ++ viewTurn model)
-      ]
-
-viewLobby : Model -> Html Msg
-viewLobby { opponent } =
-  let
-    html =
-      case opponent of
-        Nothing ->
-          Html.text "Waiting for opponent..."
-        _ ->
-          Html.button [ onClick StartGame ] [ Html.text "Start Game" ]
-  in
-    Html.div
-      [ id "wrapper" ]
-      [ Html.div
-          [ id "lobby", class "centered" ]
-          [ Html.text "Lobby"
-          , Html.br [] []
-          , html
-          ]
-      ]
-
-viewGameOver : Model -> Html Msg
-viewGameOver { myScore, opponent } =
-  let
-    (resultText, (buttonAttr, buttonHtml)) =
-      case opponent of
-        Just opp ->
-          let
-            startStr =
-              if myScore > opp.score then
-                "Congratulations! You won "
-              else if opp.score > myScore then
-                "Darn, looks like you lost "
-              else
-                "Woah, you tied "
-            in
-              ( startStr ++ String.fromInt myScore ++ " to " ++ String.fromInt opp.score ++ "."
-              , ( [ onClick StartGame ]
-                , [ Html.text "Rematch?" ]
-                )
-              )
-        Nothing ->
-          (  "Looks like your opponent left..."
-          , ( [ onClick ReturnToLobby ]
-            , [ Html.text "Return to lobby." ]
-            )
-          )
-  in
-    Html.div
-      [ id "wrapper" ]
-      [ Html.div
-          [ id "resultScreen", class "centered" ]
-          [ Html.text resultText
-          , Html.br [] []
-          , Html.button buttonAttr buttonHtml
-          ]
-      ]
-
-viewNoConnection : String -> Html Msg
-viewNoConnection message =
-  Html.div
-    [ id "wrapper" ]
-    [ Html.div
-        [ id "noConnection", class "centered" ]
-        [ Html.text message ]
-    ]
-
-view : Model -> Browser.Document Msg
-view model =
-  { title = "ScrabbElm"
-  , body =
-      [ case model.state of
-        Lobby ->
-          viewLobby model
-        GameActive ->
-          viewGame model
-        GameOver ->
-          viewGameOver model
-        NoConnection message ->
-          viewNoConnection message
-      ]
-  }
-
-isSettingBlank : Maybe (Int, Tile) -> Bool
-isSettingBlank =
-  Maybe.withDefault False << Maybe.map (Tile.isBlank << Tuple.second)
+      Sub.none

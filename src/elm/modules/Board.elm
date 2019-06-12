@@ -1,10 +1,17 @@
-module Board exposing
-  ( Board, init, set, isEmpty
-  , getTileAt, placePending
-  , placeAtIndices, view
-  , pendingTilesWordCheck
-  , pendingTilesCheckFirstTurn
-  )
+module Board
+  exposing
+    ( Board
+    , Event
+    , init
+    , set
+    , isEmpty
+    , getTileAt
+    , placePending
+    , placeAtIndices
+    , view
+    , pendingTilesWordCheck
+    , pendingTilesCheckFirstTurn
+    )
 
 import Dict exposing (Dict)
 import Html exposing (Html, Attribute)
