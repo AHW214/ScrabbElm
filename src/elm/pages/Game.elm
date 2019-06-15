@@ -1,7 +1,7 @@
 module Page.Game
   exposing
     ( Model
-    , Msg
+    , Msg(..)
     , init
     , update
     , subscriptions
@@ -22,6 +22,7 @@ import Multiplayer
 import RedBlackTree exposing (Tree)
 import WebSocket exposing (ConnectionInfo)
 
+import Bag exposing (Bag)
 import Board exposing (Board)
 import Player exposing (Player)
 import Rack exposing (Rack)
@@ -77,32 +78,25 @@ type Msg
   | StartGame
   | EndGame
   | ReturnToLobby
+  | ServerMessage String
 
 update : Tree -> Msg -> Model -> ( Model, Cmd Msg )
 update dict msg model =
   case msg of
-    ReceivedString stringified ->
+    ServerMessage stringified ->
       let
         newModel =
-          case Decode.decodeString Multiplayer.eventDecoder stringified of
+          case Decode.decodeString eventDecoder stringified of
             Err errMsg ->
               let
-                _ = Debug.log "multiplayer decode error: " errMsg
+                _ = Debug.log "game server message decode error: " errMsg
               in
                 model
 
             Ok event ->
-              handleMultiplayer event
+              handleServerEvent event
       in
         ( newModel
-        , Cmd.none
-        )
-
-    SocketError errMsg ->
-      let
-        _ = Debug.log "websocket error: " errMsg
-      in
-        ( model
         , Cmd.none
         )
 
@@ -278,16 +272,16 @@ update dict msg model =
       , Cmd.none
       )
 
-handleMultiplayer : Multiplayer.Event -> Model
-handleMultiplayer event =
+handleServerEvent : WsEvent -> Model
+handleServerEvent event =
   case event of
-    Multiplayer.PlayerJoined player ->
+    PlayerJoined player ->
       { model | Room.join player model.room }
 
-    Multiplayer.PlayerLeft player ->
+    PlayerLeft player ->
       { model | Room.leave player model.room }
 
-    Multiplayer.StartGame bag ->
+    GameStarted bag ->
       let
         ( newRack, newBag ) = Rack.init bag
       in
@@ -302,13 +296,16 @@ handleMultiplayer event =
           , state = Active
         }
 
-      Multiplayer.Exchanged bag ->
+      Passed ->
+        { model | consecutivePasses = model.consecutivePasses + 1 }
+
+      Exchanged bag ->
         { model
           | bag = newBag
           , consecutivePasses = model.consecutivePasses + 1
         }
 
-      Multiplayer.Placed newBag placed player ->
+      Placed newBag placed player ->
         { model
           | bag = newBag
           , board = Board.placeAtIndices placed model.board
@@ -316,10 +313,7 @@ handleMultiplayer event =
           , consecutivePasses = 0
         }
 
-      Multiplayer.Passed ->
-        { model | consecutivePasses = model.consecutivePasses + 1 }
-
-      Multiplayer.EndGame player ->
+      GameEnded player ->
         { model
           | room = Room.updatePlayer player model.room
           , state = Over
@@ -337,36 +331,135 @@ sendToServer socketStatus value =
         Cmd.none
 
 
+-- websocket events
+
+type WsEvent
+  = PlayerJoined Player
+  | PlayerLeft Player
+  | GameStarted Bag
+  | Passed
+  | Exchanged Bag
+  | Placed Bag Placed Player
+  | GameEnded Player
+
+type alias Index
+  = ( Int, Int )
+
+type alias Placed
+  = List ( Index, Tile )
+
+indexDecoder : Decoder Index
+indexDecoder =
+  Decode.map2 Tuple.pair
+    (Decode.index 0 Decode.int)
+    (Decode.index 1 Decode.int)
+
+indexEncoder : Index -> Value
+indexEncoder ( i, j ) =
+  Encode.list Encode.int [ i, j ]
+
+placedDecoder : Decoder Placed
+placedDecoder =
+  Decode.list <|
+    Decode.map2 Tuple.pair
+      (Decode.field "index" indexDecoder)
+      (Decode.field "tile" Tile.decoder)
+
+placedEncoder : Placed -> Value
+placedEncoder =
+  Encode.list
+    (\( index, tile ) ->
+      Encode.object
+        [ ( "index", indexEncoder index )
+        , ( "tile", Tile.encoder tile )
+        ]
+    )
+
+eventDecoder : Decoder WsEvent
+eventDecoder =
+  Decode.field "eventType" Decode.string
+    |> Decode.andThen
+        (\event ->
+            case event of
+              "playerJoined" ->
+                Decode.map PlayerJoined
+                  (Decode.at [ "data", "player" ] Player.decoder)
+
+              "playerLeft" ->
+                Decode.map PlayerLeft
+                  (Decode.at [ "data", "player" ] Player.decoder)
+
+              "gameStarted" ->
+                Decode.map GameStarted
+                  (Decode.at [ "data", "bag" ] Bag.decoder)
+
+              "passed" ->
+                Decode.succeed Passed
+
+              "exchanged" ->
+                Decode.map Exchanged
+                  (Decode.at [ "data", "bag" ] Bag.decoder)
+
+              "placed" ->
+                Decode.map3 Placed
+                  (Decode.at [ "data", "bag" ] Bag.decoder)
+                  (Decode.at [ "data", "placed" ] placedDecoder)
+                  (Decode.at [ "data", "player" ] Player.decoder)
+
+              "gameEnded" ->
+                Decode.map GameEnded
+                  (Decode.at [ "data", "player" ] Player.decoder)
+
+              _ ->
+                Decode.fail "unknown websocket event"
+        )
+
+eventEncoder : String -> Value -> Value
+eventEncoder eventType data =
+  Encode.object
+    [ ( "eventType", Encode.string eventType )
+    , ( "data", data)
+    ]
+
+startGameEncoder : Value
+startGameEncoder =
+  eventEncoder "gameStarted" Encode.null
+
+passEncoder : Value
+passEncoder =
+  eventEncoder "passed" Encode.null
+
+exchangeEncoder : Bag -> Value
+exchangeEncoder bag =
+  eventEncoder "exchanged" <|
+    Encode.object
+      [ ( "bag", Bag.encoder bag ) ]
+
+placeEncoder : Bag -> Placed -> Int -> Value
+placeEncoder bag placed score =
+  eventEncoder "placed" <|
+    Encode.object
+      [ ( "bag", Bag.encoder bag )
+      , ( "placed", placedEncoder placed )
+      , ( "score", Encode.int score)
+      ]
+
+endGameEncoder : Int -> Value
+endGameEncoder score =
+  eventEncoder "gameEnded" <|
+    Encode.object
+      [ ( "score", Encode.int score ) ]
+
+
 -- subscriptions
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-  Sub.batch
-    [ WebSocket.events webSocketHandler
-    , if isSettingBlank model.held then
-        Decode.map SetBlank keyDecoder
-          |> Browser.Events.onKeyDown
-      else
-        Sub.none
-    ]
-
-webSocketHandler : WebSocket.Event -> Msg
-webSocketHandler event =
-  case event of
-    WebSocket.Connected info ->
-      SocketConnect info
-
-    WebSocket.StringMessage _ message ->
-      ReceivedString message
-
-    WebSocket.Closed _ _ reason ->
-      SocketClosed reason
-
-    WebSocket.Error _ ->
-      SocketError "websocket error"
-
-    WebSocket.BadMessage error ->
-      SocketError error
+  if isSettingBlank model.held then
+    Decode.map SetBlank keyDecoder
+      |> Browser.Events.onKeyDown
+  else
+    Sub.none
 
 keyDecoder : Decode.Decoder (Maybe Char)
 keyDecoder =

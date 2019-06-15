@@ -81,10 +81,22 @@ type Msg
   | SocketClosed (Maybe String)
   | ReceivedString String
   | SocketError String
+  | ConnectingMsg Connecting.Msg
+  | DisconnectedMsg Disconnected.Msg
+  | LobbyMsg Lobby.Msg
+  | GameMsg Game.Msg
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-  case ( msg, model ) of
+  case ( msg, model.page ) of
+    ( SocketConnect info, _ ) ->
+      ( { model
+          | socketInfo = Connected info
+          , page = Connecting Connecting.init
+        }
+      , WebSocket.sendString info model.room.id
+      )
+
     ( SocketClosed reason, _ ) ->
       ( { model
           | socketInfo = Closed reason
@@ -92,6 +104,22 @@ update msg model =
         }
       , Cmd.none
       )
+
+    ( ReceivedString message, page ) ->
+        case page of
+          Lobby lobby ->
+            Lobby.update (Lobby.ServerMessage message) lobby
+              |> updatePage Lobby LobbyMsg model
+          Game game ->
+            Game.update (Game.ServerMessage message) game
+              |> updatePage Game GameMsg model
+          _ ->
+            let
+              _ = Debug.log "received server message when on page: " model.page
+            in
+              ( model
+              , Cmd.none
+              )
 
     ( SocketError errMsg, _ ) ->
       let
@@ -101,41 +129,65 @@ update msg model =
         , Cmd.none
         )
 
-    ( SocketConnect info, Connecting _ ) ->
-      ( { model | socketInfo = Connected info }
-      , WebSocket.sendString info model.room.id
+    ( ConnectingMsg pageMsg, Connecting connecting ) ->
+      Connecting.update pageMsg connecting
+        |> updatePage Connecting ConnectingMsg model
+
+    ( DisconnectedMsg pageMsg, Disconnected disconnected ) ->
+      Disconnected.update pageMsg disconnected
+        |> updatePage Disconnected DisconnectedMsg model
+
+    ( LobbyMsg pageMsg, Lobby lobby ) ->
+      Lobby.update pageMsg lobby
+        |> updatePage Lobby LobbyMsg model
+
+    ( GameMsg pageMsg, Game game ) ->
+      Game.update pageMsg game
+        |> updatePage Lobby GameMsg model
+
+    ( _, _ ) ->
+      ( model
+      , Cmd.none
       )
 
-    ( ReceivedString stringified, _ ) ->
-      let
-        newModel =
-          case Decode.decodeString Multiplayer.eventDecoder stringified of
-            Err errMsg ->
-              let
-                _ = Debug.log "multiplayer decode error: " errMsg
-              in
-                model
-
-            Ok event ->
-              handleMultiplayer event
-      in
-        ( newModel
-        , Cmd.none
-        )
-
-    
+updatePage : Page -> (pageMsg -> Msg) -> Model -> (pageModel, Cmd pageMsg) -> ( Model, Cmd Msg )
+updatePage page toMsg model ( pageModel, pageMsg ) =
+  ( { model | page = page pageModel }
+  , Cmd.map toMsg pageMsg
+  )
 
 
 -- subscriptions
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-  case model of
-    Lobby lobby ->
-      Sub.map LobbyMsg (Lobby.subscriptions lobby)
+  Sub.batch
+    [ WebSocket.events webSocketHandler
+    , case model of
+        Lobby lobby ->
+          Sub.map LobbyMsg (Lobby.subscriptions lobby)
 
-    Game game ->
-      Sub.map GameMsg (Game.subscriptions game)
+        Game game ->
+          Sub.map GameMsg (Game.subscriptions game)
 
-    _ ->
-      Sub.none
+        _ ->
+          Sub.none
+    ]
+
+webSocketHandler : WebSocket.Event -> Msg
+webSocketHandler event =
+  case event of
+    WebSocket.Connected info ->
+      SocketConnect info
+
+    WebSocket.StringMessage _ message ->
+      ReceivedString message
+
+    WebSocket.Closed _ _ reason ->
+      SocketClosed reason
+
+    WebSocket.Error _ ->
+      SocketError "websocket error"
+
+    WebSocket.BadMessage error ->
+      SocketError error

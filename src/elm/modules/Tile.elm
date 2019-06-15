@@ -1,16 +1,27 @@
-module Tile exposing
-  ( Tile, Event, blank, blankFrom, letter
-  , blankToLetter, isBlank, score, char, string
-  , exchange, encoder, decoder, view, numBlanks
-  )
+module Tile
+  exposing
+    ( Tile
+    , Event
+    , blank
+    , blankFrom
+    , blankToLetter
+    , char
+    , decoder
+    , encoder
+    , isBlank
+    , letter
+    , score
+    , string
+    , view
+    )
 
-import Random.List
-import Random exposing (Generator)
-import Html exposing (Html, Attribute)
-import Html.Events exposing (on, onClick, keyCode)
-import Html.Attributes exposing (class, type_)
+import Html exposing (Html)
+import Html.Attributes as HA
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
+import Random exposing (Generator)
+import Random.List
+
 
 type alias Event msg
   = Maybe Char -> msg
@@ -18,9 +29,6 @@ type alias Event msg
 type Tile
   = Blank (Maybe Char)
   | Letter Char Int
-
-numBlanks : Int
-numBlanks = 2
 
 points : List (Int, List Char)
 points =
@@ -101,36 +109,6 @@ string : Tile -> String
 string =
   String.fromChar << char
 
-chooseRandom : Int -> (List Tile, List Tile) -> Generator (Maybe (List Tile, List Tile))
-chooseRandom i (chosen, bag) =
-  if i <= 0 then
-    Random.constant (Just (chosen, bag))
-  else
-    Random.List.choose bag
-      |> Random.andThen
-        (\(maybeTile, newBag) ->
-          case maybeTile of
-            Nothing ->
-              Random.constant Nothing
-            Just tile ->
-              Random.lazy (\_ -> chooseRandom (i - 1) (tile :: chosen, newBag))
-        )
-
-exchange : List Tile -> List Tile -> Generator (Maybe (List Tile, List Tile))
-exchange discarded bag =
-  chooseRandom (List.length discarded) ([], bag)
-    |> Random.andThen
-      (\result ->
-        case result of
-          Nothing ->
-            Random.constant Nothing
-          Just (chosen, newBag) ->
-            Random.map2
-              (\x y -> Just (x, y))
-              (Random.constant chosen)
-              (Random.List.shuffle (discarded ++ newBag))
-      )
-
 decoder : Decoder Tile
 decoder =
   Decode.index 0 Decode.int
@@ -157,8 +135,8 @@ view tile =
   let
     viewLetter c v =
       ( []
-      , [ Html.div [ class "letter" ] [ Html.text (String.fromChar c) ]
-        , Html.div [ class "points" ] [ Html.text (String.fromInt v) ]
+      , [ Html.div [ HA.class "letter" ] [ Html.text (String.fromChar c) ]
+        , Html.div [ HA.class "points" ] [ Html.text (String.fromInt v) ]
         ]
       )
 
@@ -172,5 +150,5 @@ view tile =
           ( [], [] )
     in
       Html.div
-        (class "tile" :: attrs)
+        (HA.class "tile" :: attrs)
         html
