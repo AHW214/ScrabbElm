@@ -37,22 +37,15 @@ main =
 -- model
 
 type alias Model =
-  { socketInfo : SocketStatus
-  , dict : Tree String
+  { dict : Tree String
   , page : Page
   }
 
 type Page
   = Connecting Connecting.Model
-  | Disconnected Disconnected.Model
-  | Lobby Lobby.Model
-  | Game Game.Model
-
-
-type SocketStatus
-  = Unopened
-  | Connected ConnectionInfo
-  | Closed (Maybe String)
+  | Disconnected String Disconnected.Model
+  | Lobby ConnectionInfo Lobby.Model
+  | Game ConnectionInfo Game.Model
 
 
 init : Flags -> ( Model, Cmd Msg )
@@ -61,16 +54,10 @@ init () =
     , dict = RBT.empty
     , page = Connecting Connecting.init
     }
-  , Cmd.batch
-      [ Http.get
-          { url = "https://raw.githubusercontent.com/AHW214/ScrabbElm/master/assets/dictionary.txt"
-          , expect = Http.expectString GotDict
-          }
-      , Http.get
-          { url = ("http://" ++ Multiplayer.serverIP)
-          , expect = Http.expectString GotTicket
-          }
-      ]
+  , Http.get
+      { url = "https://raw.githubusercontent.com/AHW214/ScrabbElm/master/assets/dictionary.txt"
+      , expect = Http.expectString GotDict
+      }
   )
 
 
@@ -89,19 +76,12 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
   case ( msg, model.page ) of
-    ( SocketConnect info, _ ) ->
-      ( { model
-          | socketInfo = Connected info
-          , page = Connecting Connecting.init
-        }
-      , WebSocket.sendString info model.room.id
-      )
+    ( SocketConnect connInfo, Connecting connecting ) ->
+        Connecting.update (Connecting.ServerConnected connInfo) connecting
+          |> updatePage Connecting ConnectingMsg model
 
     ( SocketClosed reason, _ ) ->
-      ( { model
-          | socketInfo = Closed reason
-          , page = Disconnected Disconnected.init
-        }
+      ( { model , page = Disconnected Disconnected.init }
       , Cmd.none
       )
 
@@ -110,13 +90,16 @@ update msg model =
           Lobby lobby ->
             Lobby.update (Lobby.ServerMessage message) lobby
               |> updatePage Lobby LobbyMsg model
+
           Game game ->
             Game.update (Game.ServerMessage message) game
               |> updatePage Game GameMsg model
+
+          Connecting connecting ->
+            Connecting.update (Connecting.ServerMessage message) connecting
+              |> updatePage Connecting ConnectingMsg model
+
           _ ->
-            let
-              _ = Debug.log "received server message when on page: " model.page
-            in
               ( model
               , Cmd.none
               )

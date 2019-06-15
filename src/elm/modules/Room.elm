@@ -20,3 +20,17 @@ join pl room =
 leave : Player -> Room -> Room
 leave { name } room =
   { room | players = List.filter ((/=) name << .name) room.players }
+
+updatePlayer : Player -> Room -> Room
+updatePlayer player room =
+  let
+    update =
+      List.foldl (\p ps ->
+        if p.name == player.name then
+          player :: ps
+        else
+          p :: ps
+      ) []
+  in
+    { room | players = update room.players }
+

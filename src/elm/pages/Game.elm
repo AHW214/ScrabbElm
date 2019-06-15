@@ -18,7 +18,6 @@ import Json.Decode as Decode
 import Json.Encode as Encode
 import Random
 
-import Multiplayer
 import RedBlackTree exposing (Tree)
 import WebSocket exposing (ConnectionInfo)
 
@@ -60,7 +59,7 @@ init room =
     , consecutivePasses = 0
     , state = Waiting
     }
-  , WebSocket.connect ("ws://" ++ Multiplayer.serverIP) []
+  , Cmd.none
   )
 
 
@@ -80,8 +79,8 @@ type Msg
   | ReturnToLobby
   | ServerMessage String
 
-update : Tree -> Msg -> Model -> ( Model, Cmd Msg )
-update dict msg model =
+update : ConnectionInfo -> Tree -> Msg -> Model -> ( Model, Cmd Msg )
+update connInfo dict msg model =
   case msg of
     ServerMessage stringified ->
       let
@@ -203,13 +202,13 @@ update dict msg model =
       in
         ( newModel
         , Multiplayer.exchangeEncoder exBag
-            |> sendToServer model.socketStatus
+            |> WebSocket.sendJsonString connInfo
         )
 
     PassTurn ->
       ( { model | consecutivePasses = model.consecutivePasses + 1 }
       , Multiplayer.passEncoder
-          |> sendToServer model.socketStatus
+          |> WebSocket.sendJsonString connInfo
       )
 
     EndTurn ->
@@ -252,19 +251,19 @@ update dict msg model =
             , consecutivePasses = 0
             , state = newState
           }
-        , sendToServer model.socketStatus valueOut
+        , WebSocket.sendJsonString connInfo valueOut
         )
 
     StartGame ->
       ( { model | state = Active }
       , Multiplayer.startGameEncoder
-          |> sendToServer model.socketStatus
+          |> WebSocket.sendJsonString connInfo
       )
 
     EndGame ->
       ( { model | state = Over }
       , Multiplayer.endGameEncoder Room.me model.room
-          |> sendToServer model.socketStatus
+          |> WebSocket.sendJsonString connInfo
       )
 
     ReturnToLobby ->
@@ -318,17 +317,6 @@ handleServerEvent event =
           | room = Room.updatePlayer player model.room
           , state = Over
         }
-
-sendToServer : SocketStatus -> Encode.Value -> Cmd Msg
-sendToServer socketStatus value =
-  case socketStatus of
-    Connected info ->
-      WebSocket.sendJsonString info value
-    _ ->
-      let
-        _ = Debug.log "sendToServer error: socket status is" socketStatus
-      in
-        Cmd.none
 
 
 -- websocket events
