@@ -11,11 +11,11 @@ module Page.Game
 
 -- imports
 
+import Browser.Events
 import Html exposing (Html)
 import Html.Attributes as HA
-import Html.Events as HE
-import Json.Decode as Decode
-import Json.Encode as Encode
+import Json.Decode as Decode exposing (Decoder)
+import Json.Encode as Encode exposing (Value)
 import Random
 
 import RedBlackTree exposing (Tree)
@@ -93,7 +93,7 @@ update connInfo dict msg model =
                 model
 
             Ok event ->
-              handleServerEvent event
+              handleServerEvent event model
       in
         ( newModel
         , Cmd.none
@@ -201,14 +201,13 @@ update connInfo dict msg model =
               model
       in
         ( newModel
-        , Multiplayer.exchangeEncoder exBag
+        , exchangeEncoder exBag
             |> WebSocket.sendJsonString connInfo
         )
 
     PassTurn ->
       ( { model | consecutivePasses = model.consecutivePasses + 1 }
-      , Multiplayer.passEncoder
-          |> WebSocket.sendJsonString connInfo
+      , WebSocket.sendJsonString connInfo passEncoder
       )
 
     EndTurn ->
@@ -235,11 +234,11 @@ update connInfo dict msg model =
         ( newState, valueOut ) =
           if Rack.allEmpty newRack then
             ( Over
-            , Multiplayer.endGameEncoder newScore
+            , endGameEncoder newScore
             )
           else
             ( Active
-            , Multiplayer.placeEncoder newBag placed newScore
+            , placeEncoder newBag placed newScore
             )
       in
         ( { model
@@ -256,13 +255,12 @@ update connInfo dict msg model =
 
     StartGame ->
       ( { model | state = Active }
-      , Multiplayer.startGameEncoder
-          |> WebSocket.sendJsonString connInfo
+      , WebSocket.sendJsonString connInfo startGameEncoder
       )
 
     EndGame ->
       ( { model | state = Over }
-      , Multiplayer.endGameEncoder Room.me model.room
+      , endGameEncoder Room.me model.room
           |> WebSocket.sendJsonString connInfo
       )
 
@@ -271,8 +269,8 @@ update connInfo dict msg model =
       , Cmd.none
       )
 
-handleServerEvent : WsEvent -> Model
-handleServerEvent event =
+handleServerEvent : WsEvent -> Model -> Model
+handleServerEvent event model =
   case event of
     PlayerJoined player ->
       { model | Room.join player model.room }
@@ -406,7 +404,7 @@ eventEncoder : String -> Value -> Value
 eventEncoder eventType data =
   Encode.object
     [ ( "eventType", Encode.string eventType )
-    , ( "data", data)
+    , ( "data", data )
     ]
 
 startGameEncoder : Value
