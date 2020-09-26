@@ -30,7 +30,7 @@ connect url protocols =
 
 disconnect : String -> Cmd msg
 disconnect url =
-  message "connect"
+  message "disconnect"
     (Encode.object
       [ ( "url", Encode.string url ) ]
     )

@@ -50,8 +50,7 @@ type Page
 
 init : Flags -> ( Model, Cmd Msg )
 init () =
-  ( { socketInfo = Unopened
-    , dict = RBT.empty
+  ( { dict = RBT.empty
     , page = Connecting Connecting.init
     }
   , Http.get
